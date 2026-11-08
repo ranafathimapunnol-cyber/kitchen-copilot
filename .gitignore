@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.bak
+
+# Secrets and certificates
+*.pem
+*.key
+secrets/

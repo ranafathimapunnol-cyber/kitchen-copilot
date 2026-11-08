@@ -1,0 +1,108 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    profiles: ["core"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kitchen_copilot_db
+      POSTGRES_USER: kitchen
+      POSTGRES_PASSWORD: kitchen_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - kitchen_copilot_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kitchen -d kitchen_copilot_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    profiles: ["core"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - services/api/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://kitchen:kitchen_dev_password@db:5432/kitchen_copilot_db
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    profiles: ["core"]
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  ai:
+    profiles: ["ai"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    command:
+      - uvicorn
+      - spikes.ai.streaming:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8010"
+    ports:
+      - "8010:8010"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  actions:
+    profiles: ["actions"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    command:
+      - python
+      - -m
+      - spikes.actions.app
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  kitchen_copilot_db_data:
