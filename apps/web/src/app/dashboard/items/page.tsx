@@ -15,7 +15,7 @@ const config = {
       optionsEndpoint: ENDPOINTS.categories,
     },
     {
-      name: "unit_id",
+      name: "standard_unit_id",
       label: "Standard unit",
       type: "select" as const,
       required: true,

@@ -138,17 +138,20 @@ Validate backend token streaming from FastAPI to a client using Server-Sent Even
 - Implemented a standalone FastAPI streaming endpoint.
 - Used Server-Sent Events (SSE).
 - Streamed FakeLLM output token by token.
+- Emitted a simulated `get_stock_status` tool-step event.
 - Verified the completion marker `[DONE]`.
+- Integrated the stream into the Next.js `/streaming` page.
+- Verified tool-event display, incremental tokens, and completion status in the browser.
 
 ### Result
 
-**Passed at backend prototype level.**
+**Passed.** FastAPI SSE delivery and Next.js browser integration were both verified using FakeLLM.
 
 ### Limitations
 
 - The experiment uses FakeLLM.
+- The tool-step event is simulated; it does not access production inventory.
 - Real Gemini streaming has not been validated.
-- Full Next.js frontend integration has not been established by this test.
 
 ## 4. Automated Test Results
 
@@ -160,7 +163,7 @@ Latest verified command:
 
 Latest verified result:
 
-**11 passed in 1.11s**
+**11 passed in 1.50s**
 
 The automated test suite uses FakeLLM and does not make live Gemini API requests.
 
@@ -172,7 +175,7 @@ Real Gemini function calling was separately verified using the configured API cr
 |---|---|---|
 | Tool calling | FakeLLM and Gemini function calling | Passed |
 | Vector retrieval | pgvector and deterministic hash embeddings | Passed at prototype level |
-| Streaming | FastAPI SSE with FakeLLM | Passed at backend prototype level |
+| Streaming | FastAPI SSE, simulated tool event, and Next.js frontend | Passed at prototype level; browser integration verified |
 
 ### Overall conclusion
 
@@ -186,4 +189,4 @@ The automated AI spike test suite currently reports **11 passed**.
 
 These results demonstrate technical feasibility for the Week 1 prototypes only. They do not establish production readiness or completion of the full AI-agent functionality.
 
-The production AI agent remains disabled (`AGENT_ENABLED=false`). Production semantic embeddings, real Gemini streaming, frontend streaming integration, and production AI-agent integration remain separate work items.
+The production AI agent remains disabled (`AGENT_ENABLED=false`). Production semantic embeddings, real Gemini streaming, and production AI-agent integration remain separate work items. The verified frontend streaming page is a FakeLLM demonstration, not a production AI chat workflow.

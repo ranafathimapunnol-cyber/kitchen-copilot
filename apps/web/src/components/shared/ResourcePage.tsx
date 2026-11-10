@@ -235,8 +235,8 @@ export default function ResourcePage({
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
-                    {config.fields.slice(0, 4).map((field) => (
-                      <th key={field.name} className="px-3 py-3 font-semibold">
+                    {config.columns.slice(0, 4).map((field) => (
+                      <th key={field.key} className="px-3 py-3 font-semibold">
                         {field.label}
                       </th>
                     ))}
@@ -248,12 +248,12 @@ export default function ResourcePage({
                       key={String(record.id ?? index)}
                       className="border-b border-slate-100 last:border-0"
                     >
-                      {config.fields.slice(0, 4).map((field) => (
+                      {config.columns.slice(0, 4).map((field) => (
                         <td
-                          key={field.name}
+                          key={field.key}
                           className="px-3 py-3 text-slate-700"
                         >
-                          {displayValue(record[field.name])}
+                          {displayValue(record[field.key])}
                         </td>
                       ))}
                     </tr>

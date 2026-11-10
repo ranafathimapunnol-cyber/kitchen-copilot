@@ -123,7 +123,7 @@ Uses deterministic feature-hashing embeddings. Production semantic retrieval usi
 
 File: `streaming.py`
 
-Demonstrates FastAPI Server-Sent Events (SSE) and token-by-token streaming using FakeLLM.
+Demonstrates FastAPI Server-Sent Events (SSE), a simulated tool-execution event, and token-by-token streaming using FakeLLM. The Next.js frontend consumes and displays both event types.
 
 ### Run
 
@@ -139,9 +139,19 @@ Example request:
 
 Stop the service using the corresponding Docker Compose command.
 
+### Verified frontend integration
+
+- Next.js page: `/streaming`
+- FastAPI endpoint: `/stream` on port 8010.
+- Verified the `get_stock_status` tool-step event in the browser.
+- Verified incremental response tokens and the `[DONE]` completion marker.
+- Browser execution status reached `Completed`.
+
+The tool step is simulated. It does not query or modify actual inventory.
+
 ### Limitation
 
-The backend streaming prototype uses FakeLLM. Real Gemini streaming and complete frontend integration have not yet been validated.
+The streaming prototype uses FakeLLM. Real Gemini streaming has not been validated.
 
 ## 4. Automated Tests
 
@@ -171,6 +181,8 @@ Latest verified result:
 
 The automated tests use FakeLLM and do not require a live Gemini API request.
 
+The latest verified run completed with **11 passed in 1.50s**. The campus-scoped retrieval test was run in the API container, which has the required database configuration.
+
 The real Gemini function-calling experiment was separately executed successfully.
 
 ## 5. Safety and Limitations
@@ -195,7 +207,7 @@ The real Gemini function-calling experiment was separately executed successfully
 | Campus isolation | Tested |
 | pgvector retrieval | Implemented and tested |
 | Retrieval benchmark | 10/10 Hit@3 |
-| SSE streaming prototype | Implemented and tested |
+| SSE streaming prototype | Implemented and tested, including Next.js browser integration |
 | Automated spike tests | 11 passed |
 | Production semantic embeddings | Pending |
 | Real Gemini streaming | Pending |

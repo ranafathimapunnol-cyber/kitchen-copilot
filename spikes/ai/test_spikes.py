@@ -227,7 +227,23 @@ def test_streaming_produces_sse_events():
     events = list(event_stream("How should rice be stored?"))
 
     assert len(events) > 1
-    assert all(event.startswith("data: ") for event in events)
+
+    # The first event reports the fake tool execution.
+    assert events[0].startswith("event: tool_step\n")
+    assert '"tool": "get_stock_status"' in events[0]
+    assert '"status": "completed"' in events[0]
+
+    # The remaining events stream response tokens.
+    token_events = [
+        event for event in events
+        if event.startswith("data: {")
+    ]
+
+    assert token_events
+    assert all(
+        json.loads(event[6:]).get("token")
+        for event in token_events
+    )
     assert events[-1] == "data: [DONE]\n\n"
 
 
