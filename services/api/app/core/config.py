@@ -1,10 +1,14 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore # type: ignore
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "Kitchen Copilot API"
     APP_VERSION: str = "0.1.0"
     AGENT_ENABLED: bool = False
+
+    # Gemini AI configuration
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
 
     DATABASE_URL: str
     SECRET_KEY: str

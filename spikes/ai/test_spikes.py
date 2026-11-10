@@ -19,6 +19,10 @@ from spikes.ai.tool_calling import (
 )
 
 
+# --------------------------------------------------
+# Tool calling tests
+# --------------------------------------------------
+
 def test_tool_call_returns_campus_scoped_stock():
     user = UserContext(
         user_id="test-user",
@@ -28,7 +32,7 @@ def test_tool_call_returns_campus_scoped_stock():
 
     result = run_tool_call("Show rice stock", user)
 
-    assert result["tool"] == "get_stock_summary"
+    assert result["tool"] == "get_stock_status"
     assert result["result"]["campus_id"] == "KC-DEMO-NORTH"
     assert result["result"]["quantity"] == 125
 
@@ -44,7 +48,7 @@ def test_tool_call_rejects_unauthorized_role():
 
     with pytest.raises(PermissionError):
         registry.execute(
-            ToolCall("get_stock_summary", {"item_name": "Rice"}),
+            ToolCall("get_stock_status", {"item_name": "Rice"}),
             user,
         )
 
@@ -92,6 +96,41 @@ def test_tool_call_rejects_cross_campus_result():
             user,
         )
 
+
+def test_tool_call_returns_south_campus_stock():
+    user = UserContext(
+        user_id="test-user",
+        campus_id="KC-DEMO-SOUTH",
+        role="STORE_KEEPER",
+    )
+
+    result = run_tool_call("Show rice stock", user)
+
+    assert result["result"]["campus_id"] == "KC-DEMO-SOUTH"
+    assert result["result"]["quantity"] == 80
+
+
+def test_tool_call_handles_missing_item():
+    registry = build_registry()
+
+    user = UserContext(
+        user_id="test-user",
+        campus_id="KC-DEMO-NORTH",
+        role="STORE_KEEPER",
+    )
+
+    result = registry.execute(
+        ToolCall("get_stock_status", {"item_name": "Sugar"}),
+        user,
+    )
+
+    assert result["campus_id"] == "KC-DEMO-NORTH"
+    assert result["message"] == "No matching stock record found."
+
+
+# --------------------------------------------------
+# Retrieval tests
+# --------------------------------------------------
 
 def test_embedding_is_deterministic():
     provider = HashEmbeddingProvider()
@@ -180,6 +219,10 @@ def test_pgvector_retrieval_respects_campus():
         engine.dispose()
 
 
+# --------------------------------------------------
+# Streaming tests
+# --------------------------------------------------
+
 def test_streaming_produces_sse_events():
     events = list(event_stream("How should rice be stored?"))
 
@@ -191,4 +234,10 @@ def test_streaming_produces_sse_events():
 def test_streaming_includes_prompt():
     events = list(event_stream("Check rice storage"))
 
-    assert "Check rice storage" in "".join(json.loads(event[6:])["token"] for event in events if event.startswith("data: {"))
+    combined = "".join(
+        json.loads(event[6:])["token"]
+        for event in events
+        if event.startswith("data: {")
+    )
+
+    assert "Check rice storage" in combined
