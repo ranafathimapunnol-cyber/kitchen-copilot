@@ -456,10 +456,7 @@ export interface components {
         };
         /** LoginRequest */
         LoginRequest: {
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /** Password */
             password: string;
@@ -590,10 +587,7 @@ export interface components {
         UserCreate: {
             /** Full Name */
             full_name: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /** Password */
             password: string;
@@ -607,10 +601,7 @@ export interface components {
             campus_id: number;
             /** Full Name */
             full_name: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             role: components["schemas"]["UserRole"];
             /** Is Active */
