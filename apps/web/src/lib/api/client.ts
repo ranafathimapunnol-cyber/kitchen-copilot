@@ -11,6 +11,7 @@ type ApiOptions = Omit<RequestInit, "body"> & {
 
 let csrfToken: string | null = null;
 let redirectingToLogin = false;
+let refreshPromise: Promise<boolean> | null = null;
 
 export function clearCsrfToken(): void {
   csrfToken = null;
@@ -92,13 +93,49 @@ async function getErrorMessage(response: Response): Promise<string> {
     : JSON.stringify(message);
 }
 
+/**
+ * Prevent multiple simultaneous requests from refreshing
+ * the session independently.
+ */
+async function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await sendRequest(REFRESH_ENDPOINT, {
+          method: "POST",
+        });
+
+        return response.ok;
+      } catch {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  return refreshPromise;
+}
+
+/**
+ * Redirect to login only when the user is not already there.
+ * This prevents a full-page login refresh loop.
+ */
 function redirectToLogin(): void {
-  if (typeof window === "undefined" || redirectingToLogin) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (window.location.pathname === "/login") {
+    return;
+  }
+
+  if (redirectingToLogin) {
     return;
   }
 
   redirectingToLogin = true;
-  window.location.assign("/login");
+  window.location.replace("/login");
 }
 
 export async function apiRequest<T>(
@@ -113,22 +150,19 @@ export async function apiRequest<T>(
     "/api/auth/csrf",
   ];
 
-  if (
+  const shouldRefresh =
     response.status === 401 &&
-    !excludedRefreshRoutes.includes(endpoint)
-  ) {
-    try {
-      const refreshResponse = await sendRequest(REFRESH_ENDPOINT, {
-        method: "POST",
-      });
+    !excludedRefreshRoutes.includes(endpoint);
 
-      if (refreshResponse.ok) {
-        response = await sendRequest(endpoint, options);
-      } else {
-        clearCsrfToken();
-        redirectToLogin();
-      }
-    } catch {
+  if (shouldRefresh) {
+    const refreshed = await refreshSession();
+
+    if (refreshed) {
+      // Retry the original request after successful refresh.
+      response = await sendRequest(endpoint, options);
+    }
+
+    if (!refreshed || response.status === 401) {
       clearCsrfToken();
       redirectToLogin();
     }
@@ -146,17 +180,29 @@ export async function apiRequest<T>(
 }
 
 export const api = {
-  get: <T>(endpoint: string) => apiRequest<T>(endpoint),
+  get: <T>(endpoint: string) =>
+    apiRequest<T>(endpoint),
 
   post: <T>(endpoint: string, body?: unknown) =>
-    apiRequest<T>(endpoint, { method: "POST", body }),
+    apiRequest<T>(endpoint, {
+      method: "POST",
+      body,
+    }),
 
   put: <T>(endpoint: string, body: unknown) =>
-    apiRequest<T>(endpoint, { method: "PUT", body }),
+    apiRequest<T>(endpoint, {
+      method: "PUT",
+      body,
+    }),
 
   patch: <T>(endpoint: string, body: unknown) =>
-    apiRequest<T>(endpoint, { method: "PATCH", body }),
+    apiRequest<T>(endpoint, {
+      method: "PATCH",
+      body,
+    }),
 
   delete: <T>(endpoint: string) =>
-    apiRequest<T>(endpoint, { method: "DELETE" }),
+    apiRequest<T>(endpoint, {
+      method: "DELETE",
+    }),
 };

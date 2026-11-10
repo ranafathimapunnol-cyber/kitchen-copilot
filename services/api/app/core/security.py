@@ -1,11 +1,11 @@
-import secrets
-from datetime import datetime, timedelta, timezone
 
-import jwt
-from pwdlib import PasswordHash
+import secrets
+from datetime import UTC, datetime, timedelta
+
+import jwt  # type: ignore
+from pwdlib import PasswordHash  # type: ignore
 
 from app.core.config import settings
-
 
 password_hash = PasswordHash.recommended()
 
@@ -19,7 +19,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: int) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     payload = {
         "sub": str(user_id),
@@ -39,7 +39,7 @@ def create_access_token(user_id: int) -> str:
 
 
 def create_refresh_token(user_id: int) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     payload = {
         "sub": str(user_id),

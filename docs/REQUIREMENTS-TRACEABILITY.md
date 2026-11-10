@@ -1,16 +1,17 @@
+
 # Kitchen Copilot — Requirements Traceability
 
 Source: Campus Software Requirements Document (SRD) v1.0
 
-Status: Initial mapping — implementation pending.
+Status: Week 1 implementation tracking — requirement-level progress recorded from verified implementation and test evidence.
 
 ## 1. Purchase and Supplier Management
 
 | ID | Requirement | Status |
 |---|---|---|
-| PUR01 | Purchase management | PENDING |
-| PUR02 | Supplier bill management | PENDING |
-| PUR03 | Goods receipt management | PENDING |
+| PUR01 | Purchase management | IN_PROGRESS |
+| PUR02 | Supplier bill management | IN_PROGRESS |
+| PUR03 | Goods receipt management | IN_PROGRESS |
 | PUR04 | Supplier payment management | PENDING |
 | PUR05 | Supplier returns and credits | PENDING |
 
@@ -18,7 +19,7 @@ Status: Initial mapping — implementation pending.
 
 | ID | Requirement | Status |
 |---|---|---|
-| STK01 | Opening stock and stock ledger | PENDING |
+| STK01 | Opening stock and stock ledger | IN_PROGRESS |
 | STK02 | Kitchen stock issues | PENDING |
 | STK03 | Unused stock returns | PENDING |
 | STK04 | Stock balances and low-stock monitoring | PENDING |
@@ -28,7 +29,7 @@ Status: Initial mapping — implementation pending.
 
 | ID | Requirement | Status |
 |---|---|---|
-| MEAL01 | Student headcount records | PENDING |
+| MEAL01 | Student headcount records | IN_PROGRESS |
 | MEAL02 | Food preparation records | PENDING |
 | MEAL03 | Food distribution records | PENDING |
 | MEAL04 | Leftover tracking | PENDING |
@@ -69,13 +70,13 @@ Status: Initial mapping — implementation pending.
 
 | Area | Requirement | Status |
 |---|---|---|
-| Authentication | Secure login and session management | PENDING |
-| Authorisation | Four roles and permissions | PENDING |
-| Campus isolation | Campus-scoped data access | PENDING |
-| Audit | Record important user activities | PENDING |
+| Authentication | Secure login and session management | TESTED |
+| Authorisation | Four roles and permissions | IN_PROGRESS |
+| Campus isolation | Campus-scoped data access | TESTED |
+| Audit | Record important user activities | IN_PROGRESS |
 | Reports | Export and print support | PENDING |
-| AI | Controlled agent and approval workflows | PENDING |
-| Security | Protect sensitive operational information | PENDING |
+| AI | Controlled agent and approval workflows | IN_PROGRESS |
+| Security | Protect sensitive operational information | IN_PROGRESS |
 
 ## 8. Acceptance Tests
 
@@ -92,10 +93,14 @@ Status: Initial mapping — implementation pending.
 
 ## 9. Status Definitions
 
-- PENDING: Not implemented.
-- IN_PROGRESS: Currently being developed.
-- IMPLEMENTED: Development completed.
-- TESTED: Verified through tests.
-- ACCEPTED: Confirmed by client.
+- PENDING: No verified implementation of the requirement yet.
+- IN_PROGRESS: Some implementation exists, but the complete requirement is not finished.
+- IMPLEMENTED: The complete requirement has been implemented.
+- TESTED: The implemented requirement has passed its relevant verification tests.
+- ACCEPTED: The delivered requirement has been confirmed by the client.
 
-All requirements must be implemented and tested before final project acceptance.
+A requirement must not be marked IMPLEMENTED or TESTED without supporting evidence. ACCEPTED requires client confirmation.
+
+Approval of the project proposal and permission matrix on 05 November 2026 does not automatically mean individual requirements have been implemented, tested, or accepted.
+
+The Week 1 development milestone does not represent completion or production acceptance of the entire Kitchen Copilot system.

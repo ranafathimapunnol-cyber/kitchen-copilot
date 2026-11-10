@@ -33,3 +33,6 @@ __all__ += [
     "SupplierReturn",
     "SupplierReturnItem",
 ]
+
+from app.models.daily_headcount import DailyHeadcount
+__all__ += ["DailyHeadcount"]

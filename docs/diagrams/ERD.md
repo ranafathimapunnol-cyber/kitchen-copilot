@@ -1,7 +1,7 @@
 # Kitchen Copilot — Entity Relationship Diagram
 
 This diagram reflects the registered SQLAlchemy models and the
-database schema migrated through revision `fb84dd6fb038`.
+database schema migrated through revision `8a2c4d91e6b7`.
 
 ```mermaid
 erDiagram
@@ -23,6 +23,7 @@ erDiagram
     CAMPUS ||--o{ SUPPLIER_PAYMENT : has
     CAMPUS ||--o{ SUPPLIER_RETURN : has
     CAMPUS ||--o{ SUPPLIER_RETURN_ITEM : has
+    CAMPUS ||--o{ DAILY_HEADCOUNT : records
 
     USER ||--o{ AUDIT_LOG : performs
     USER ||--o{ PURCHASE : creates
@@ -57,3 +58,19 @@ erDiagram
 
     ITEM ||--o{ STOCK_MOVEMENT : tracks
     GOODS_RECEIPT_ITEM ||--o| STOCK_MOVEMENT : generates
+
+## DailyHeadcount
+
+| Field | Type | Constraint |
+|---|---|---|
+| id | Integer | Primary key |
+| campus_id | Integer | Foreign key to Campus, indexed |
+| headcount_date | Date | Required |
+| student_count | Integer | Required, >= 0 |
+| created_at | Timestamp with timezone | Server-generated |
+
+Additional constraints:
+- Unique `(campus_id, headcount_date)`.
+- At most one headcount record per campus per date.
+- Student count cannot be negative.
+- Records are campus-scoped.

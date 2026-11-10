@@ -1,9 +1,10 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore # type: ignore
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "Kitchen Copilot API"
     APP_VERSION: str = "0.1.0"
+    AGENT_ENABLED: bool = False
 
     DATABASE_URL: str
     SECRET_KEY: str

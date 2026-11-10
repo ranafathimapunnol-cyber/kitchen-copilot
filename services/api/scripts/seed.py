@@ -1,5 +1,6 @@
 
 import argparse
+import hashlib
 import os
 import sys
 from datetime import UTC, date, datetime, timedelta
@@ -13,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models import (
     Campus,
     Category,
+    DailyHeadcount,
     Item,
     MealSession,
     Menu,
@@ -259,7 +261,6 @@ MENUS = [
     ("Tuesday Dinner", "Dinner"),
 ]
 
-
 DEMO_CAMPUSES = [
     {
         "name": "Kitchen Copilot Demo Campus North",
@@ -271,7 +272,6 @@ DEMO_CAMPUSES = [
     },
 ]
 
-
 ROLE_NAMES = {
     UserRole.ADMIN: "Demo Administrator",
     UserRole.KITCHEN_MANAGER: "Demo Kitchen Manager",
@@ -279,6 +279,10 @@ ROLE_NAMES = {
     UserRole.ACCOUNTS: "Demo Accounts User",
 }
 
+
+# ---------------------------------------------------------
+# DEMO USERS
+# ---------------------------------------------------------
 
 def get_demo_users(db, campus):
     users = {}
@@ -313,7 +317,9 @@ def get_demo_users(db, campus):
         confirm = getpass("Confirm demo password: ")
 
         if len(password) < 8:
-            raise ValueError("Demo password must contain at least 8 characters.")
+            raise ValueError(
+                "Demo password must contain at least 8 characters."
+            )
 
         if password != confirm:
             raise ValueError("Passwords do not match.")
@@ -341,6 +347,10 @@ def get_demo_users(db, campus):
 
     return users
 
+
+# ---------------------------------------------------------
+# MASTER DATA SEEDING
+# ---------------------------------------------------------
 
 def seed_master_data(db, campus):
     categories = {}
@@ -400,7 +410,9 @@ def seed_master_data(db, campus):
     for category_name, names in ITEM_GROUPS.items():
         for name in names:
             if category_name == "Dairy Products":
-                standard_symbol = "L" if name in ("Milk", "Cream") else "kg"
+                standard_symbol = (
+                    "L" if name in ("Milk", "Cream") else "kg"
+                )
             elif category_name == "Oils":
                 standard_symbol = "L"
             elif category_name == "Cleaning Supplies":
@@ -500,12 +512,74 @@ def seed_master_data(db, campus):
     return items, units, suppliers
 
 
+# ---------------------------------------------------------
+# DAILY HEADCOUNT SEEDING
+# ---------------------------------------------------------
+
+def seed_daily_headcounts(db, campus, days=90):
+    """
+    Create deterministic daily student headcounts for a demo campus.
+
+    The headcount is the total number of students needing food
+    for the day, not a separate count for each meal.
+
+    Existing records are preserved.
+    """
+
+    today = date.today()
+    start_date = today - timedelta(days=days - 1)
+
+    existing_dates = {
+        row[0]
+        for row in (
+            db.query(DailyHeadcount.headcount_date)
+            .filter(DailyHeadcount.campus_id == campus.id)
+            .all()
+        )
+    }
+
+    created_count = 0
+
+    for day_offset in range(days):
+        headcount_date = start_date + timedelta(days=day_offset)
+
+        if headcount_date in existing_dates:
+            continue
+
+        seed_value = (
+            f"{campus.code}:{headcount_date.isoformat()}"
+        )
+
+        digest = hashlib.sha256(
+            seed_value.encode("utf-8")
+        ).hexdigest()
+
+        student_count = 420 + (
+            int(digest[:8], 16) % 51
+        )
+
+        db.add(
+            DailyHeadcount(
+                campus_id=campus.id,
+                headcount_date=headcount_date,
+                student_count=student_count,
+            )
+        )
+
+        created_count += 1
+
+    return created_count
+
+
+# ---------------------------------------------------------
+# PURCHASE, RECEIPT AND PAYMENT SEEDING
+# ---------------------------------------------------------
+
 def seed_purchase_and_receipt(
     db,
     campus,
     users,
     items,
-    units,
     suppliers,
 ):
     admin = users[UserRole.ADMIN]
@@ -536,7 +610,7 @@ def seed_purchase_and_receipt(
             ("Onion", "20.000", "35.0000"),
         ]
 
-        subtotal = Decimal(0)
+        subtotal = Decimal("0.00")
         prepared = []
 
         for item_name, qty, rate in line_data:
@@ -700,6 +774,115 @@ def seed_purchase_and_receipt(
             db.add(payment)
 
 
+# ---------------------------------------------------------
+# HISTORICAL PURCHASE SEEDING
+# ---------------------------------------------------------
+
+def seed_historical_purchases(
+    db,
+    campus,
+    users,
+    items,
+    suppliers,
+):
+    """Create three repeatable historical demo purchase bills."""
+
+    admin = users[UserRole.ADMIN]
+    supplier = suppliers["Demo Grain Traders"]
+
+    historical_bills = [
+        (90, "HIST-001", ("52.0000", "115.0000", "32.0000")),
+        (60, "HIST-002", ("58.0000", "105.0000", "40.0000")),
+        (15, "HIST-003", ("55.0000", "112.0000", "35.0000")),
+    ]
+
+    quantities = {
+        "Rice": "25.000",
+        "Toor Dal": "10.000",
+        "Onion": "20.000",
+    }
+
+    created_count = 0
+
+    for days_ago, suffix, rates in historical_bills:
+        invoice_number = f"KC-DEMO-{campus.code}-{suffix}"
+
+        existing = (
+            db.query(Purchase)
+            .filter(
+                Purchase.campus_id == campus.id,
+                Purchase.supplier_id == supplier.id,
+                Purchase.invoice_number == invoice_number,
+            )
+            .first()
+        )
+
+        if existing:
+            continue
+
+        purchase_date = date.today() - timedelta(days=days_ago)
+
+        line_data = [
+            ("Rice", rates[0]),
+            ("Toor Dal", rates[1]),
+            ("Onion", rates[2]),
+        ]
+
+        prepared_lines = []
+        subtotal = Decimal("0.00")
+
+        for item_name, rate_text in line_data:
+            item = items[item_name]
+            item_quantity = quantity(quantities[item_name])
+            unit_rate = Decimal(rate_text)
+            line_total = money(item_quantity * unit_rate)
+
+            subtotal += line_total
+
+            prepared_lines.append(
+                PurchaseItem(
+                    campus_id=campus.id,
+                    item_id=item.id,
+                    quantity=item_quantity,
+                    unit_id=item.standard_unit_id,
+                    unit_rate=unit_rate,
+                    line_total=line_total,
+                    remarks="Synthetic historical demo purchase",
+                )
+            )
+
+        subtotal = money(subtotal)
+
+        purchase = Purchase(
+            campus_id=campus.id,
+            supplier_id=supplier.id,
+            invoice_number=invoice_number,
+            purchase_date=purchase_date,
+            subtotal=subtotal,
+            discount=Decimal("0.00"),
+            extra_charges=Decimal("0.00"),
+            grand_total=subtotal,
+            remarks="Synthetic historical demonstration purchase",
+            status="DRAFT",
+            created_by=admin.id,
+        )
+
+        db.add(purchase)
+        db.flush()
+
+        for line in prepared_lines:
+            line.purchase_id = purchase.id
+            db.add(line)
+
+        created_count += 1
+
+    return created_count
+
+
+# ---------------------------------------------------------
+# MAIN DEMO SEED
+# ---------------------------------------------------------
+
 def seed_demo():
     db = SessionLocal()
 
@@ -730,15 +913,39 @@ def seed_demo():
 
             users = get_demo_users(db, campus)
 
-            items, units, suppliers = seed_master_data(db, campus)
+            items, _units, suppliers = seed_master_data(db, campus)
 
+            headcounts_created = seed_daily_headcounts(
+                db,
+                campus,
+                days=90,
+            )
+
+            print(
+                f"  Daily headcounts: {headcounts_created} new records "
+                "(90-day target)"
+            )
+
+            # Five arguments only: units is not required here.
             seed_purchase_and_receipt(
                 db,
                 campus,
                 users,
                 items,
-                units,
                 suppliers,
+            )
+
+            historical_created = seed_historical_purchases(
+                db,
+                campus,
+                users,
+                items,
+                suppliers,
+            )
+
+            print(
+                f"  Historical purchases: {historical_created} new bills "
+                "(3-month history)"
             )
 
             print("  Demo users: 4")

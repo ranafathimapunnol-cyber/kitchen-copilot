@@ -1,21 +1,22 @@
 import json
-import pytest
 
+import pytest  # type: ignore
+
+from spikes.ai.retrieval import (
+    DIMENSIONS,
+    HashEmbeddingProvider,
+    add_document,
+    get_engine,
+    initialize_schema,
+    search_procedures,
+)
+from spikes.ai.streaming import event_stream
 from spikes.ai.tool_calling import (
     ToolCall,
     UserContext,
     build_registry,
     run_tool_call,
 )
-from spikes.ai.retrieval import (
-    DIMENSIONS,
-    HashEmbeddingProvider,
-    get_engine,
-    initialize_schema,
-    add_document,
-    search_procedures,
-)
-from spikes.ai.streaming import event_stream
 
 
 def test_tool_call_returns_campus_scoped_stock():
@@ -132,7 +133,7 @@ def test_pgvector_retrieval_respects_campus():
     try:
         initialize_schema(engine)
 
-        from sqlalchemy import text
+        from sqlalchemy import text  # type: ignore
 
         with engine.begin() as connection:
             connection.execute(
@@ -166,7 +167,7 @@ def test_pgvector_retrieval_respects_campus():
         assert south_results == []
 
     finally:
-        from sqlalchemy import text
+        from sqlalchemy import text  # type: ignore
 
         with engine.begin() as connection:
             connection.execute(

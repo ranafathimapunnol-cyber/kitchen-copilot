@@ -1,3 +1,4 @@
+
 name: Kitchen Copilot CI
 
 on:
@@ -36,6 +37,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js for OpenAPI generation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -57,6 +69,27 @@ jobs:
       - name: Verify migration revision
         working-directory: services/api
         run: alembic current
+
+      - name: Start FastAPI for OpenAPI schema
+        working-directory: services/api
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          echo $! > /tmp/kitchen-copilot-api.pid
+
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/openapi.json -o /tmp/openapi.json; then
+              break
+            fi
+            sleep 2
+          done
+
+          test -s /tmp/openapi.json
+
+      - name: Verify generated TypeScript types are up to date
+        working-directory: apps/web
+        run: |
+          npm run generate:api-types
+          git diff --exit-code -- src/types/api.ts
 
       - name: Run backend unit tests
         working-directory: services/api

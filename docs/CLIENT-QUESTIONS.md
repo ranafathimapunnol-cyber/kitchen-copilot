@@ -1,6 +1,6 @@
 # Kitchen Copilot — Client Clarification Questions
 
-Status: Pending client confirmation.
+Status: Partially answered — approved role decisions are recorded in docs/client-notes.md; remaining questions require client confirmation.
 
 ## 1. Campus and Stores
 
@@ -10,10 +10,16 @@ Status: Pending client confirmation.
 
 ## 2. User Roles
 
-1. Can Kitchen Managers approve stock adjustments?
-2. Can Store Keepers approve their own stock counts?
-3. Who can create and edit supplier records?
-4. Who can approve purchases and supplier payments?
+Confirmed by the approved permission matrix:
+
+- Kitchen Managers may approve stock adjustments only if they did not perform the physical count.
+- Store Keepers may record physical stock counts but cannot approve stock adjustments.
+- Admin and Accounts may manage supplier records.
+
+Still awaiting clarification:
+
+1. Who approves purchases?
+2. Who approves supplier payments?
 
 ## 3. Inventory
 
@@ -62,4 +68,4 @@ Status: Pending client confirmation.
 2. Is AWS the required hosting platform?
 3. What are the backup and recovery requirements?
 
-These questions must be reviewed with the client before finalising the relevant system behaviour.
+Only explicitly confirmed decisions are recorded as approved. Remaining questions must be reviewed with the client before finalising the relevant system behaviour. Confirmed role decisions are documented in docs/client-notes.md.

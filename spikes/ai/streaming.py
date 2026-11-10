@@ -1,8 +1,8 @@
 import json
 from collections.abc import Iterator
 
-from fastapi import FastAPI, Query
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Query  # type: ignore
+from fastapi.responses import StreamingResponse  # pyright: ignore[reportMissingImports]
 
 
 class FakeLLM:

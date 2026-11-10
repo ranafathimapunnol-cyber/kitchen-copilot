@@ -3,7 +3,7 @@ import hashlib
 import math
 import re
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text  # type: ignore
 
 DIMENSIONS = 64
 
@@ -136,22 +136,22 @@ def run_demo(campus_id):
             (
                 "rice-storage",
                 "Rice storage procedure",
-                "Store rice in a clean, dry and ventilated area. "
-                "Keep bags away from moisture and inspect regularly.",
+                ("Store rice in a clean, dry and ventilated area. "
+                "Keep bags away from moisture and inspect regularly."),
                 "DEMO-SOP-001",
             ),
             (
                 "vegetable-cleaning",
                 "Vegetable cleaning procedure",
-                "Wash vegetables with clean potable water before "
-                "preparation. Use clean equipment.",
+                ("Wash vegetables with clean potable water before "
+                "preparation. Use clean equipment."),
                 "DEMO-SOP-002",
             ),
             (
                 "stock-rotation",
                 "Stock rotation procedure",
-                "Use first-in first-out. Check expiry dates and "
-                "use older stock first.",
+                ("Use first-in first-out. Check expiry dates and "
+                "use older stock first."),
                 "DEMO-SOP-003",
             ),
         ]
