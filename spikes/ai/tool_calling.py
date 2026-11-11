@@ -1,8 +1,10 @@
 
-from dataclasses import dataclass
-from typing import Any, Callable
 import os
-
+import random
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 # ==================================================
 # USER CONTEXT
@@ -143,14 +145,82 @@ def run_tool_call(prompt, context):
 
 
 # ==================================================
+# GEMINI RETRY HANDLING
+# ==================================================
+
+def generate_with_retry(client, **kwargs):
+    """
+    Call Gemini with retry handling.
+
+    Retryable HTTP errors:
+    - 429: Rate limit exceeded
+    - 500: Internal server error
+    - 502: Bad gateway
+    - 503: Service unavailable
+    - 504: Gateway timeout
+
+    Maximum attempts: 3.
+    """
+
+    max_attempts = 3
+    base_delay = 2
+    max_delay = 30
+
+    retryable_statuses = {
+        429,
+        500,
+        502,
+        503,
+        504,
+    }
+
+    for attempt in range(max_attempts):
+        try:
+            return client.models.generate_content(
+                **kwargs
+            )
+
+        except Exception as exc:
+            status_code = (
+                getattr(exc, "code", None)
+                or getattr(exc, "status_code", None)
+            )
+
+            if status_code not in retryable_statuses:
+                raise
+
+            if attempt == max_attempts - 1:
+                raise
+
+            delay = min(
+                base_delay * (2 ** attempt),
+                max_delay,
+            )
+
+            delay += random.uniform(0, 1)
+
+            print(
+                f"Gemini HTTP {status_code}. "
+                f"Retry attempt {attempt + 2}/{max_attempts} "
+                f"in {delay:.1f} seconds."
+            )
+
+            time.sleep(delay)
+
+
+# ==================================================
 # REAL GEMINI LLM
 # ==================================================
 
 class GeminiLLM:
+
     def __init__(self, api_key=None, model=None):
         from google import genai
+        from google.genai import types  # type: ignore
 
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or os.getenv(
+            "GEMINI_API_KEY"
+        )
 
         self.model = model or os.getenv(
             "GEMINI_MODEL",
@@ -164,10 +234,17 @@ class GeminiLLM:
 
         self.client = genai.Client(
             api_key=self.api_key,
+            http_options=types.HttpOptions(
+                timeout=30000,
+            ),
         )
 
+    # --------------------------------------------------
+    # GEMINI TOOL CALL
+    # --------------------------------------------------
+
     def call_tool(self, prompt: str):
-        from google.genai import types
+        from google.genai import types  # type: ignore
 
         function_declaration = types.FunctionDeclaration(
             name="get_stock_status",
@@ -197,7 +274,8 @@ class GeminiLLM:
             tools=[tool],
         )
 
-        response = self.client.models.generate_content(
+        response = generate_with_retry(
+            self.client,
             model=self.model,
             contents=prompt,
             config=config,
@@ -224,6 +302,10 @@ class GeminiLLM:
             config,
         )
 
+    # --------------------------------------------------
+    # SEND TOOL RESULT BACK TO GEMINI
+    # --------------------------------------------------
+
     def generate_tool_response(
         self,
         prompt,
@@ -232,17 +314,13 @@ class GeminiLLM:
         result,
         config,
     ):
-        from google.genai import types
+        from google.genai import types  # type: ignore
 
         function_response = types.Part.from_function_response(
             name=tool_call.name,
             response=result,
         )
 
-        # Preserve the complete conversation sequence:
-        # 1. Original user message
-        # 2. Gemini's function-call response
-        # 3. Python's function result
         contents = [
             types.Content(
                 role="user",
@@ -257,7 +335,8 @@ class GeminiLLM:
             ),
         ]
 
-        return self.client.models.generate_content(
+        return generate_with_retry(
+            self.client,
             model=self.model,
             contents=contents,
             config=config,
@@ -280,7 +359,7 @@ def run_gemini_tool_call(prompt, context):
 
     call, original_response, config = call_result
 
-    # Python validates the tool and user permissions.
+    # Python validates permissions and campus isolation.
     result = registry.execute(
         call,
         context,
@@ -308,6 +387,7 @@ def run_gemini_tool_call(prompt, context):
 # ==================================================
 
 if __name__ == "__main__":
+
     user = UserContext(
         user_id="demo-user-1",
         campus_id="KC-DEMO-NORTH",
