@@ -250,6 +250,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/master/{resource}/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Master Record */
+        put: operations["update_master_record_api_master__resource___record_id__put"];
+        post?: never;
+        /** Delete Master Record */
+        delete: operations["delete_master_record_api_master__resource___record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/master/{resource}/{record_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Master Record */
+        post: operations["deactivate_master_record_api_master__resource___record_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/purchases/": {
         parameters: {
             query?: never;
@@ -354,6 +389,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authorization/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Permissions */
+        get: operations["get_my_permissions_api_authorization_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authorization/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Modules And Permissions */
+        get: operations["list_modules_and_permissions_api_authorization_modules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authorization/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Staff */
+        get: operations["list_staff_api_authorization_staff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authorization/staff/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Staff Permissions */
+        get: operations["get_staff_permissions_api_authorization_staff__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authorization/staff/{user_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Staff Permissions */
+        put: operations["update_staff_permissions_api_authorization_staff__user_id__permissions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authorization/staff/{user_id}/permissions/{permission_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Staff Permission */
+        delete: operations["revoke_staff_permission_api_authorization_staff__user_id__permissions__permission_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/waste/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Waste Records */
+        get: operations["list_waste_records_api_waste_records_get"];
+        put?: never;
+        /** Create Waste Record */
+        post: operations["create_waste_record_api_waste_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/waste/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Waste Record Detail */
+        get: operations["get_waste_record_detail_api_waste_records__record_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Waste Record */
+        delete: operations["delete_waste_record_api_waste_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Waste Record */
+        patch: operations["update_waste_record_api_waste_records__record_id__patch"];
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -414,6 +588,23 @@ export interface paths {
         };
         /** Database Health */
         get: operations["database_health_health_db_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboard Overview */
+        get: operations["dashboard_overview_api_dashboard_overview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -551,6 +742,11 @@ export interface components {
             /** Remarks */
             remarks?: string | null;
         };
+        /** StaffPermissionUpdate */
+        StaffPermissionUpdate: {
+            /** Permission Ids */
+            permission_ids?: number[];
+        };
         /** SupplierInput */
         SupplierInput: {
             /** Name */
@@ -611,7 +807,7 @@ export interface components {
          * UserRole
          * @enum {string}
          */
-        UserRole: "ADMIN" | "KITCHEN_MANAGER" | "STORE_KEEPER" | "ACCOUNTS";
+        UserRole: "ADMIN" | "KITCHEN_MANAGER" | "STAFF";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -624,6 +820,61 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WasteItemInput */
+        WasteItemInput: {
+            /**
+             * Waste Type
+             * @enum {string}
+             */
+            waste_type: "RAW_INGREDIENT" | "PREPARED_FOOD";
+            /** Item Id */
+            item_id?: number | null;
+            /** Food Name */
+            food_name?: string | null;
+            /** Menu Id */
+            menu_id?: number | null;
+            /** Unit Id */
+            unit_id: number;
+            /** Quantity */
+            quantity: number | string;
+            /**
+             * Waste Stage
+             * @enum {string}
+             */
+            waste_stage: "STORAGE" | "PREPARATION" | "COOKING" | "SERVING" | "AFTER_MEAL";
+            /**
+             * Waste Reason
+             * @enum {string}
+             */
+            waste_reason: "SPOILED" | "EXPIRED" | "DAMAGED" | "OVERPRODUCTION" | "LEFTOVER" | "PLATE_WASTE" | "OTHER";
+            /**
+             * Estimated Cost
+             * @default 0
+             */
+            estimated_cost: number | string;
+        };
+        /** WasteRecordCreate */
+        WasteRecordCreate: {
+            /** Waste Date */
+            waste_date?: string | null;
+            /** Meal Session Id */
+            meal_session_id?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Items */
+            items: components["schemas"]["WasteItemInput"][];
+        };
+        /** WasteRecordUpdate */
+        WasteRecordUpdate: {
+            /** Waste Date */
+            waste_date?: string | null;
+            /** Meal Session Id */
+            meal_session_id?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Items */
+            items?: components["schemas"]["WasteItemInput"][] | null;
         };
     };
     responses: never;
@@ -806,7 +1057,10 @@ export interface operations {
     };
     get_categories_api_master_categories_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -872,7 +1126,10 @@ export interface operations {
     };
     get_units_api_master_units_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -938,7 +1195,10 @@ export interface operations {
     };
     get_unit_conversions_api_master_unit_conversions_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -1004,7 +1264,10 @@ export interface operations {
     };
     get_items_api_master_items_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -1070,7 +1333,10 @@ export interface operations {
     };
     get_suppliers_api_master_suppliers_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -1136,7 +1402,10 @@ export interface operations {
     };
     get_meal_sessions_api_master_meal_sessions_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -1202,7 +1471,10 @@ export interface operations {
     };
     get_menus_api_master_menus_get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -1270,6 +1542,8 @@ export interface operations {
         parameters: {
             query?: {
                 menu_id?: number | null;
+                page?: number;
+                page_size?: number;
             };
             header?: never;
             path?: never;
@@ -1316,6 +1590,114 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_master_record_api_master__resource___record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource: string;
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_master_record_api_master__resource___record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource: string;
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_master_record_api_master__resource___record_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource: string;
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1600,6 +1982,375 @@ export interface operations {
             };
         };
     };
+    get_my_permissions_api_authorization_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_modules_and_permissions_api_authorization_modules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staff_api_authorization_staff_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_staff_permissions_api_authorization_staff__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_staff_permissions_api_authorization_staff__user_id__permissions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffPermissionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_staff_permission_api_authorization_staff__user_id__permissions__permission_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+                permission_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_waste_records_api_waste_records_get: {
+        parameters: {
+            query?: {
+                waste_date?: string | null;
+                meal_session_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_waste_record_api_waste_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WasteRecordCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_waste_record_detail_api_waste_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_waste_record_api_waste_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_waste_record_api_waste_records__record_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WasteRecordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     root__get: {
         parameters: {
             query?: never;
@@ -1676,6 +2427,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    dashboard_overview_api_dashboard_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
