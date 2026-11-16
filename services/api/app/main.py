@@ -1,13 +1,20 @@
-import hmac
+from app.api.routes import dashboard
+import hmac  # noqa: I001
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
+from fastapi import FastAPI, Request  # type: ignore
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from fastapi.responses import JSONResponse # type: ignore
+from app.api.routes import waste
 from app.api.routes import auth, master_data, purchases, receipts
 from app.core.config import settings
-
-
+from app.api.routes import (
+    auth,
+    authorization,
+    master_data,
+    purchases,
+    receipts,
+    
+)
 app = FastAPI(
     title="Kitchen Copilot API",
     version="0.1.0",
@@ -52,7 +59,8 @@ app.include_router(auth.router)
 app.include_router(master_data.router)
 app.include_router(purchases.router)
 app.include_router(receipts.router)
-
+app.include_router(authorization.router)
+app.include_router(waste.router)
 
 @app.get("/")
 def root():
@@ -77,7 +85,8 @@ def api_health():
 
 @app.get("/health/db")
 def database_health():
-    from sqlalchemy import text
+    from sqlalchemy import text  # type: ignore
+
     from app.db.session import engine
 
     with engine.connect() as connection:
@@ -87,3 +96,5 @@ def database_health():
         "status": "ok",
         "database": "connected",
     }
+
+app.include_router(dashboard.router)

@@ -35,7 +35,7 @@ def test_create_and_list_units(client):
     response = client.get("/api/master/units")
 
     assert response.status_code == 200
-    assert any(row["id"] == unit["id"] for row in response.json())
+    assert any(row["id"] == unit["id"] for row in response.json()["items"])
 
 
 def test_create_unit_conversion(client):
@@ -195,7 +195,7 @@ def test_campus_isolation_and_audit_logging(client, db, setup_data):
     assert response.status_code == 200
     assert all(
         row["name"] != "Private Category"
-        for row in response.json()
+        for row in response.json()["items"]
     )
 
     create_response = client.post(
@@ -283,3 +283,26 @@ def test_missing_conversion_factor_is_rejected(client, db, setup_data):
         assert False, "Expected missing conversion to be rejected"
     except HTTPException as exc:
         assert exc.status_code == 422
+
+
+
+def test_master_list_pagination(client):
+    for index in range(5):
+        response = client.post(
+            "/api/master/categories",
+            json={"name": f"Pagination Category {index}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.get(
+        "/api/master/categories?page=2&page_size=2"
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert len(data["items"]) == 2
+    assert data["page"] == 2
+    assert data["page_size"] == 2
+    assert data["total"] == 5
+    assert data["total_pages"] == 3

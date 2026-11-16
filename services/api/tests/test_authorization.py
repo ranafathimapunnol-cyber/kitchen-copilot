@@ -1,122 +1,326 @@
+from uuid import uuid4
+
 import pytest
 
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.models import User, UserRole
-
-
-@pytest.mark.parametrize(
-    "role,endpoint,expected",
-    [
-        ("ADMIN", "/api/master/categories", 200),
-        ("KITCHEN_MANAGER", "/api/master/categories", 200),
-        ("STORE_KEEPER", "/api/master/categories", 403),
-        ("ACCOUNTS", "/api/master/categories", 403),
-
-        ("ADMIN", "/api/master/suppliers", 200),
-        ("ACCOUNTS", "/api/master/suppliers", 200),
-        ("KITCHEN_MANAGER", "/api/master/suppliers", 403),
-        ("STORE_KEEPER", "/api/master/suppliers", 403),
-
-        ("ADMIN", "/api/purchases/", 200),
-        ("ACCOUNTS", "/api/purchases/", 200),
-        ("KITCHEN_MANAGER", "/api/purchases/", 403),
-        ("STORE_KEEPER", "/api/purchases/", 403),
-
-        ("ADMIN", "/api/stock/movements", 200),
-        ("KITCHEN_MANAGER", "/api/stock/movements", 200),
-        ("STORE_KEEPER", "/api/stock/movements", 200),
-        ("ACCOUNTS", "/api/stock/movements", 403),
-
-        ("ADMIN", "/api/master/menus", 200),
-        ("KITCHEN_MANAGER", "/api/master/menus", 200),
-        ("STORE_KEEPER", "/api/master/menus", 403),
-        ("ACCOUNTS", "/api/master/menus", 403),
-        ("ADMIN", "/api/master/units", 200),
-        ("KITCHEN_MANAGER", "/api/master/units", 200),
-        ("STORE_KEEPER", "/api/master/units", 403),
-        ("ACCOUNTS", "/api/master/units", 403),
-        ("ADMIN", "/api/master/unit-conversions", 200),
-        ("KITCHEN_MANAGER", "/api/master/unit-conversions", 200),
-        ("STORE_KEEPER", "/api/master/unit-conversions", 403),
-        ("ACCOUNTS", "/api/master/unit-conversions", 403),
-        ("ADMIN", "/api/master/items", 200),
-        ("KITCHEN_MANAGER", "/api/master/items", 200),
-        ("STORE_KEEPER", "/api/master/items", 403),
-        ("ACCOUNTS", "/api/master/items", 403),
-        ("ADMIN", "/api/master/meal-sessions", 200),
-        ("KITCHEN_MANAGER", "/api/master/meal-sessions", 200),
-        ("STORE_KEEPER", "/api/master/meal-sessions", 403),
-        ("ACCOUNTS", "/api/master/meal-sessions", 403),
-        ("ADMIN", "/api/master/menu-main-items", 200),
-        ("KITCHEN_MANAGER", "/api/master/menu-main-items", 200),
-        ("STORE_KEEPER", "/api/master/menu-main-items", 403),
-        ("ACCOUNTS", "/api/master/menu-main-items", 403),
-    ],
+from app.models.authorization import (
+    Module,
+    Permission,
+    StaffAccessAssignment,
 )
-def test_role_access_matrix(
-    client, db, setup_data, role, endpoint, expected
-):
-    if role == "ADMIN":
-        user = setup_data["user"]
-    else:
-        user = User(
-            campus_id=setup_data["campus"].id,
-            full_name=f"Test {role}",
-            email=f"{role.lower()}@test.com",
-            password_hash="not-used-for-cookie-auth",
-            role=UserRole(role),
-            is_active=True,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-    client.cookies.set(
-        settings.ACCESS_COOKIE_NAME,
-        create_access_token(user.id),
-    )
-
-    response = client.get(endpoint)
-
-    assert response.status_code == expected, (
-        f"{role} accessing {endpoint}: "
-        f"expected {expected}, got {response.status_code}: {response.text}"
-    )
 
 
-@pytest.mark.parametrize(
-    "role",
-    ["KITCHEN_MANAGER", "STORE_KEEPER", "ACCOUNTS"],
-)
-def test_only_admin_can_create_users(
-    client, db, setup_data, role
-):
+def create_test_user(db, campus_id, role):
+    role = UserRole(role)
+
     user = User(
-        campus_id=setup_data["campus"].id,
-        full_name=f"Test {role}",
-        email=f"create-{role.lower()}@test.com",
+        campus_id=campus_id,
+        full_name=f"Test {role.value}",
+        email=f"{role.value.lower()}-{uuid4().hex[:8]}@test.com",
         password_hash="not-used-for-cookie-auth",
-        role=UserRole(role),
+        role=role,
         is_active=True,
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
+    return user
 
-    client.cookies.set(
-        settings.ACCESS_COOKIE_NAME,
-        create_access_token(user.id),
+
+def authenticate_as(client, user):
+    token = create_access_token(user.id)
+    client.cookies.set(settings.ACCESS_COOKIE_NAME, token)
+
+
+def assign_staff_permission(
+    db, staff, admin, module_code, module_name, permission_code
+):
+    module = (
+        db.query(Module)
+        .filter(Module.code == module_code)
+        .first()
     )
+
+    if module is None:
+        module = Module(name=module_name, code=module_code)
+        db.add(module)
+        db.flush()
+
+    permission = (
+        db.query(Permission)
+        .filter(Permission.permission_code == permission_code)
+        .first()
+    )
+
+    if permission is None:
+        action = permission_code.split(".")[-1].upper()
+        permission = Permission(
+            module_id=module.id,
+            action=action,
+            permission_code=permission_code,
+        )
+        db.add(permission)
+        db.flush()
+
+    assignment = (
+        db.query(StaffAccessAssignment)
+        .filter(
+            StaffAccessAssignment.staff_user_id == staff.id,
+            StaffAccessAssignment.permission_id == permission.id,
+        )
+        .first()
+    )
+
+    if assignment is None:
+        assignment = StaffAccessAssignment(
+            staff_user_id=staff.id,
+            permission_id=permission.id,
+            assigned_by=admin.id,
+            is_active=True,
+        )
+        db.add(assignment)
+    else:
+        assignment.is_active = True
+        assignment.assigned_by = admin.id
+
+    db.commit()
+
+
+READ_ENDPOINTS = [
+    "/api/master/categories",
+    "/api/master/units",
+    "/api/master/unit-conversions",
+    "/api/master/items",
+    "/api/master/suppliers",
+    "/api/master/meal-sessions",
+    "/api/master/menus",
+    "/api/master/menu-main-items",
+    "/api/purchases/",
+]
+
+
+@pytest.mark.parametrize("endpoint", READ_ENDPOINTS)
+def test_admin_has_read_access_to_all_modules(
+    client, setup_data, endpoint
+):
+    authenticate_as(client, setup_data["user"])
+
+    response = client.get(endpoint)
+
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("endpoint", READ_ENDPOINTS)
+def test_kitchen_manager_has_approved_read_access(
+    client, setup_data, db, endpoint
+):
+    kitchen_manager = create_test_user(
+        db, setup_data["campus"].id, "KITCHEN_MANAGER"
+    )
+    authenticate_as(client, kitchen_manager)
+
+    response = client.get(endpoint)
+
+    assert response.status_code == 200, (
+        f"KITCHEN_MANAGER accessing {endpoint}: "
+        f"{response.status_code}: {response.text}"
+    )
+
+
+@pytest.mark.parametrize("endpoint", READ_ENDPOINTS)
+def test_staff_without_assignments_is_denied(
+    client, setup_data, db, endpoint
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+    authenticate_as(client, staff)
+
+    response = client.get(endpoint)
+
+    assert response.status_code == 403, (
+        f"STAFF accessing {endpoint}: "
+        f"{response.status_code}: {response.text}"
+    )
+
+
+def test_staff_can_access_assigned_inventory_module(
+    client, setup_data, db
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+
+    assign_staff_permission(
+        db,
+        staff,
+        setup_data["user"],
+        "inventory",
+        "Inventory",
+        "inventory.read",
+    )
+
+    authenticate_as(client, staff)
+
+    response = client.get("/api/master/categories")
+    assert response.status_code == 200, response.text
+
+
+def test_staff_cannot_access_unassigned_menu_module(
+    client, setup_data, db
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+
+    assign_staff_permission(
+        db,
+        staff,
+        setup_data["user"],
+        "inventory",
+        "Inventory",
+        "inventory.read",
+    )
+
+    authenticate_as(client, staff)
+
+    response = client.get("/api/master/menus")
+    assert response.status_code == 403
+
+
+def test_inactive_staff_assignment_does_not_grant_access(
+    client, setup_data, db
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+
+    assign_staff_permission(
+        db,
+        staff,
+        setup_data["user"],
+        "inventory",
+        "Inventory",
+        "inventory.read",
+    )
+
+    assignment = (
+        db.query(StaffAccessAssignment)
+        .filter(
+            StaffAccessAssignment.staff_user_id == staff.id
+        )
+        .first()
+    )
+
+    assert assignment is not None
+
+    assignment.is_active = False
+    db.commit()
+
+    authenticate_as(client, staff)
+
+    response = client.get("/api/master/categories")
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["KITCHEN_MANAGER", "STAFF"])
+def test_only_admin_can_create_users(
+    client, setup_data, db, role
+):
+    user = create_test_user(
+        db, setup_data["campus"].id, role
+    )
+    authenticate_as(client, user)
 
     response = client.post(
         "/api/auth/users",
         json={
-            "full_name": "New Test User",
-            "email": "new-user@test.com",
+            "full_name": "Another Staff Member",
+            "email": f"new-{uuid4().hex[:8]}@test.com",
             "password": "TestPassword123!",
-            "role": "STORE_KEEPER",
+            "role": "STAFF",
         },
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["KITCHEN_MANAGER", "STAFF"])
+def test_only_admin_can_view_authorization_modules(
+    client, setup_data, db, role
+):
+    user = create_test_user(
+        db, setup_data["campus"].id, role
+    )
+    authenticate_as(client, user)
+
+    response = client.get("/api/authorization/modules")
+    assert response.status_code == 403
+
+
+def test_staff_can_view_own_effective_permissions(
+    client, setup_data, db
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+
+    assign_staff_permission(
+        db,
+        staff,
+        setup_data["user"],
+        "inventory",
+        "Inventory",
+        "inventory.read",
+    )
+
+    authenticate_as(client, staff)
+
+    response = client.get("/api/authorization/me")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["role"] == "STAFF"
+    assert "inventory.read" in data["permissions"]
+
+
+def test_staff_permissions_are_empty_by_default(
+    client, setup_data, db
+):
+    staff = create_test_user(
+        db, setup_data["campus"].id, "STAFF"
+    )
+    authenticate_as(client, staff)
+
+    response = client.get("/api/authorization/me")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["role"] == "STAFF"
+    assert data["permissions"] == []
+
+
+def test_admin_can_view_authorization_modules(
+    client, setup_data
+):
+    authenticate_as(client, setup_data["user"])
+
+    response = client.get("/api/authorization/modules")
+    assert response.status_code == 200
+
+
+def test_admin_has_all_effective_permissions(
+    client, setup_data
+):
+    authenticate_as(client, setup_data["user"])
+
+    response = client.get("/api/authorization/me")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["role"] == "ADMIN"
+    assert "inventory.read" in data["permissions"]
+    assert "menu.read" in data["permissions"]

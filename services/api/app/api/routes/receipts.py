@@ -1,5 +1,6 @@
+
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -7,37 +8,69 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.api.dependencies import get_current_user, require_roles
+from app.api.dependencies import require_permission
 from app.api.routes.master_data import (
     get_unit_conversion_factor,
     record_audit,
 )
-from app.models.user import User, UserRole
+from app.db.session import get_db
 from app.models.master_data import Item, Unit
 from app.models.purchases import (
-    Purchase,
-    PurchaseItem,
     GoodsReceipt,
     GoodsReceiptItem,
+    Purchase,
+    PurchaseItem,
     StockMovement,
 )
+from app.models.user import User
 
 router = APIRouter(tags=["Goods Receipts"])
 
 QUANTITY_STEP = Decimal("0.001")
 
 
-def quantity(value: Decimal) -> Decimal:
-    return value.quantize(QUANTITY_STEP, rounding=ROUND_HALF_UP)
+# ============================================================
+# QUANTITY HELPER
+# ============================================================
 
+def quantity(value: Decimal) -> Decimal:
+    return value.quantize(
+        QUANTITY_STEP,
+        rounding=ROUND_HALF_UP,
+    )
+
+
+# ============================================================
+# REQUEST SCHEMAS
+# ============================================================
 
 class ReceiptLineInput(BaseModel):
     purchase_item_id: int
-    quantity_received: Decimal = Field(gt=0, max_digits=18, decimal_places=3)
-    quantity_accepted: Decimal = Field(default=Decimal("0"), ge=0, max_digits=18, decimal_places=3)
-    quantity_rejected: Decimal = Field(default=Decimal("0"), ge=0, max_digits=18, decimal_places=3)
-    remarks: str | None = Field(default=None, max_length=500)
+
+    quantity_received: Decimal = Field(
+        gt=0,
+        max_digits=18,
+        decimal_places=3,
+    )
+
+    quantity_accepted: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=18,
+        decimal_places=3,
+    )
+
+    quantity_rejected: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=18,
+        decimal_places=3,
+    )
+
+    remarks: str | None = Field(
+        default=None,
+        max_length=500,
+    )
 
 
 class ReceiptCreate(BaseModel):
@@ -46,7 +79,16 @@ class ReceiptCreate(BaseModel):
     items: list[ReceiptLineInput] = Field(min_length=1)
 
 
-def get_receipt(receipt_id: int, db: Session, user: User) -> GoodsReceipt:
+# ============================================================
+# GET RECEIPT
+# ============================================================
+
+def get_receipt(
+    receipt_id: int,
+    db: Session,
+    user: User,
+) -> GoodsReceipt:
+
     receipt = (
         db.query(GoodsReceipt)
         .filter(
@@ -55,12 +97,25 @@ def get_receipt(receipt_id: int, db: Session, user: User) -> GoodsReceipt:
         )
         .first()
     )
+
     if not receipt:
-        raise HTTPException(status_code=404, detail="Goods receipt not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Goods receipt not found",
+        )
+
     return receipt
 
 
-def serialize_receipt(db: Session, receipt: GoodsReceipt) -> dict:
+# ============================================================
+# SERIALIZE RECEIPT
+# ============================================================
+
+def serialize_receipt(
+    db: Session,
+    receipt: GoodsReceipt,
+) -> dict:
+
     lines = (
         db.query(GoodsReceiptItem)
         .filter(
@@ -72,18 +127,29 @@ def serialize_receipt(db: Session, receipt: GoodsReceipt) -> dict:
     )
 
     result = []
+
     for line in lines:
-        purchase_line = db.query(PurchaseItem).filter(
-            PurchaseItem.id == line.purchase_item_id,
-            PurchaseItem.campus_id == receipt.campus_id,
-        ).first()
+
+        purchase_line = (
+            db.query(PurchaseItem)
+            .filter(
+                PurchaseItem.id == line.purchase_item_id,
+                PurchaseItem.campus_id == receipt.campus_id,
+            )
+            .first()
+        )
 
         item = None
+
         if purchase_line:
-            item = db.query(Item).filter(
-                Item.id == purchase_line.item_id,
-                Item.campus_id == receipt.campus_id,
-            ).first()
+            item = (
+                db.query(Item)
+                .filter(
+                    Item.id == purchase_line.item_id,
+                    Item.campus_id == receipt.campus_id,
+                )
+                .first()
+            )
 
         result.append({
             "id": line.id,
@@ -110,6 +176,11 @@ def serialize_receipt(db: Session, receipt: GoodsReceipt) -> dict:
     }
 
 
+# ============================================================
+# CREATE GOODS RECEIPT
+# Permission: inventory.create
+# ============================================================
+
 @router.post(
     "/api/purchases/{purchase_id}/receipts",
     status_code=status.HTTP_201_CREATED,
@@ -118,7 +189,9 @@ def create_receipt(
     purchase_id: int,
     payload: ReceiptCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.KITCHEN_MANAGER, UserRole.STORE_KEEPER)),
+    user: User = Depends(
+        require_permission("inventory.create")
+    ),
 ):
     purchase = (
         db.query(Purchase)
@@ -128,10 +201,18 @@ def create_receipt(
         )
         .first()
     )
-    if not purchase:
-        raise HTTPException(status_code=404, detail="Purchase not found")
 
-    line_ids = [line.purchase_item_id for line in payload.items]
+    if not purchase:
+        raise HTTPException(
+            status_code=404,
+            detail="Purchase not found",
+        )
+
+    line_ids = [
+        line.purchase_item_id
+        for line in payload.items
+    ]
+
     if len(line_ids) != len(set(line_ids)):
         raise HTTPException(
             status_code=422,
@@ -141,6 +222,7 @@ def create_receipt(
     prepared = []
 
     for line in payload.items:
+
         purchase_line = (
             db.query(PurchaseItem)
             .filter(
@@ -150,10 +232,14 @@ def create_receipt(
             )
             .first()
         )
+
         if not purchase_line:
             raise HTTPException(
                 status_code=404,
-                detail=f"Purchase item {line.purchase_item_id} not found in this purchase",
+                detail=(
+                    f"Purchase item {line.purchase_item_id} "
+                    "not found in this purchase"
+                ),
             )
 
         received = quantity(line.quantity_received)
@@ -163,12 +249,16 @@ def create_receipt(
         if accepted + rejected > received:
             raise HTTPException(
                 status_code=422,
-                detail="Accepted and rejected quantities cannot exceed received quantity",
+                detail=(
+                    "Accepted and rejected quantities cannot "
+                    "exceed received quantity"
+                ),
             )
 
-        # Include draft receipts too, so quantities already recorded are reserved.
+        # Include draft receipts too, so quantities already
+        # recorded are reserved.
         previously_received = (
-            db.query(GoodsReceiptItem)
+            db.query(GoodsReceiptItem.quantity_received)
             .join(
                 GoodsReceipt,
                 GoodsReceipt.id == GoodsReceiptItem.receipt_id,
@@ -178,21 +268,26 @@ def create_receipt(
                 GoodsReceiptItem.campus_id == user.campus_id,
                 GoodsReceipt.campus_id == user.campus_id,
             )
-        ).with_entities(
-            GoodsReceiptItem.quantity_received
-        ).all()
+            .all()
+        )
 
         already_recorded = sum(
-            (Decimal(str(row[0])) for row in previously_received),
+            (
+                Decimal(str(row[0]))
+                for row in previously_received
+            ),
             Decimal("0"),
         )
 
-        if already_recorded + received > Decimal(str(purchase_line.quantity)):
+        if (
+            already_recorded + received
+            > Decimal(str(purchase_line.quantity))
+        ):
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    f"Receipt quantity exceeds the remaining purchased quantity "
-                    f"for purchase item {purchase_line.id}"
+                    "Receipt quantity exceeds the remaining "
+                    f"purchased quantity for purchase item {purchase_line.id}"
                 ),
             )
 
@@ -207,7 +302,10 @@ def create_receipt(
     receipt = GoodsReceipt(
         campus_id=user.campus_id,
         purchase_id=purchase.id,
-        receipt_date=payload.receipt_date or datetime.now(timezone.utc).date(),
+        receipt_date=(
+            payload.receipt_date
+            or datetime.now(timezone.utc).date()
+        ),
         status="DRAFT",
         remarks=payload.remarks,
         created_by=user.id,
@@ -243,19 +341,29 @@ def create_receipt(
 
     except IntegrityError:
         db.rollback()
+
         raise HTTPException(
             status_code=409,
             detail="Goods receipt could not be saved",
         )
 
-    return jsonable_encoder(serialize_receipt(db, receipt))
+    return jsonable_encoder(
+        serialize_receipt(db, receipt)
+    )
 
+
+# ============================================================
+# LIST PURCHASE RECEIPTS
+# Permission: inventory.read
+# ============================================================
 
 @router.get("/api/purchases/{purchase_id}/receipts")
 def list_purchase_receipts(
     purchase_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.KITCHEN_MANAGER, UserRole.STORE_KEEPER)),
+    user: User = Depends(
+        require_permission("inventory.read")
+    ),
 ):
     purchase = (
         db.query(Purchase)
@@ -265,8 +373,12 @@ def list_purchase_receipts(
         )
         .first()
     )
+
     if not purchase:
-        raise HTTPException(status_code=404, detail="Purchase not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Purchase not found",
+        )
 
     receipts = (
         db.query(GoodsReceipt)
@@ -284,21 +396,42 @@ def list_purchase_receipts(
     ])
 
 
+# ============================================================
+# GET RECEIPT DETAILS
+# Permission: inventory.read
+# ============================================================
+
 @router.get("/api/receipts/{receipt_id}")
 def get_receipt_detail(
     receipt_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.KITCHEN_MANAGER, UserRole.STORE_KEEPER)),
+    user: User = Depends(
+        require_permission("inventory.read")
+    ),
 ):
-    receipt = get_receipt(receipt_id, db, user)
-    return jsonable_encoder(serialize_receipt(db, receipt))
+    receipt = get_receipt(
+        receipt_id,
+        db,
+        user,
+    )
 
+    return jsonable_encoder(
+        serialize_receipt(db, receipt)
+    )
+
+
+# ============================================================
+# ACCEPT RECEIPT AND POST STOCK
+# Permission: inventory.update
+# ============================================================
 
 @router.post("/api/receipts/{receipt_id}/accept")
 def accept_receipt(
     receipt_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.KITCHEN_MANAGER, UserRole.STORE_KEEPER)),
+    user: User = Depends(
+        require_permission("inventory.update")
+    ),
 ):
     receipt = (
         db.query(GoodsReceipt)
@@ -309,8 +442,12 @@ def accept_receipt(
         .with_for_update()
         .first()
     )
+
     if not receipt:
-        raise HTTPException(status_code=404, detail="Goods receipt not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Goods receipt not found",
+        )
 
     if receipt.status != "DRAFT":
         raise HTTPException(
@@ -329,12 +466,17 @@ def accept_receipt(
     )
 
     if not lines:
-        raise HTTPException(status_code=422, detail="Receipt has no items")
+        raise HTTPException(
+            status_code=422,
+            detail="Receipt has no items",
+        )
 
-    # Validate every line and conversion before adding any stock movements.
+    # Validate every line and conversion before adding
+    # any stock movements.
     movements = []
 
     for line in lines:
+
         received = Decimal(str(line.quantity_received))
         accepted = Decimal(str(line.quantity_accepted))
         rejected = Decimal(str(line.quantity_rejected))
@@ -343,8 +485,8 @@ def accept_receipt(
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    f"Accepted and rejected quantities must equal received quantity "
-                    f"for receipt item {line.id}"
+                    "Accepted and rejected quantities must equal "
+                    f"received quantity for receipt item {line.id}"
                 ),
             )
 
@@ -357,6 +499,7 @@ def accept_receipt(
             )
             .first()
         )
+
         if not purchase_line:
             raise HTTPException(
                 status_code=404,
@@ -371,8 +514,12 @@ def accept_receipt(
             )
             .first()
         )
+
         if not item:
-            raise HTTPException(status_code=404, detail="Related item not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Related item not found",
+            )
 
         standard_unit = (
             db.query(Unit)
@@ -382,6 +529,7 @@ def accept_receipt(
             )
             .first()
         )
+
         purchase_unit = (
             db.query(Unit)
             .filter(
@@ -390,6 +538,7 @@ def accept_receipt(
             )
             .first()
         )
+
         if not standard_unit or not purchase_unit:
             raise HTTPException(
                 status_code=422,
@@ -397,13 +546,17 @@ def accept_receipt(
             )
 
         if accepted > 0:
+
             factor = get_unit_conversion_factor(
                 db,
                 user,
                 purchase_unit.id,
                 standard_unit.id,
             )
-            standard_quantity = quantity(accepted * factor)
+
+            standard_quantity = quantity(
+                accepted * factor
+            )
 
             if standard_quantity <= 0:
                 raise HTTPException(
@@ -419,10 +572,14 @@ def accept_receipt(
                 )
                 .first()
             )
+
             if existing_movement:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Stock was already posted for receipt item {line.id}",
+                    detail=(
+                        "Stock was already posted for "
+                        f"receipt item {line.id}"
+                    ),
                 )
 
             movements.append({
@@ -467,23 +624,41 @@ def accept_receipt(
 
     except IntegrityError:
         db.rollback()
+
         raise HTTPException(
             status_code=409,
-            detail="Receipt stock was already posted or the receipt could not be accepted",
+            detail=(
+                "Receipt stock was already posted or "
+                "the receipt could not be accepted"
+            ),
         )
 
-    return jsonable_encoder(serialize_receipt(db, receipt))
+    return jsonable_encoder(
+        serialize_receipt(db, receipt)
+    )
 
+
+# ============================================================
+# LIST STOCK MOVEMENTS
+# Permission: inventory.read
+# ============================================================
 
 @router.get("/api/stock/movements")
 def list_stock_movements(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.KITCHEN_MANAGER, UserRole.STORE_KEEPER)),
+    user: User = Depends(
+        require_permission("inventory.read")
+    ),
 ):
     movements = (
         db.query(StockMovement)
-        .filter(StockMovement.campus_id == user.campus_id)
-        .order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
+        .filter(
+            StockMovement.campus_id == user.campus_id
+        )
+        .order_by(
+            StockMovement.created_at.desc(),
+            StockMovement.id.desc(),
+        )
         .all()
     )
 

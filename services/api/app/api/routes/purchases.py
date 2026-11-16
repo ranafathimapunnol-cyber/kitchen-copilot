@@ -1,5 +1,6 @@
+
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -7,21 +8,24 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.api.dependencies import get_current_user, require_roles
+from app.api.dependencies import require_permission
 from app.api.routes.master_data import (
     get_unit_conversion_factor,
     record_audit,
 )
-from app.models.user import User, UserRole
+from app.db.session import get_db
 from app.models.master_data import Item, Supplier, Unit
 from app.models.purchases import Purchase, PurchaseItem
-
+from app.models.user import User
 
 router = APIRouter(prefix="/api/purchases", tags=["Purchases"])
 
 MONEY = Decimal("0.01")
 
+
+# ============================================================
+# REQUEST SCHEMAS
+# ============================================================
 
 class PurchaseLineInput(BaseModel):
     item_id: int
@@ -35,8 +39,18 @@ class PurchaseCreate(BaseModel):
     supplier_id: int
     invoice_number: str = Field(min_length=1, max_length=100)
     purchase_date: date
-    discount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=18, decimal_places=2)
-    extra_charges: Decimal = Field(default=Decimal("0"), ge=0, max_digits=18, decimal_places=2)
+    discount: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=18,
+        decimal_places=2,
+    )
+    extra_charges: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=18,
+        decimal_places=2,
+    )
     remarks: str | None = None
     items: list[PurchaseLineInput] = Field(min_length=1)
 
@@ -44,14 +58,24 @@ class PurchaseCreate(BaseModel):
     @classmethod
     def clean_invoice_number(cls, value: str) -> str:
         value = value.strip()
+
         if not value:
             raise ValueError("Invoice number cannot be empty")
+
         return value
 
+
+# ============================================================
+# MONEY HELPER
+# ============================================================
 
 def money(value: Decimal) -> Decimal:
     return value.quantize(MONEY, rounding=ROUND_HALF_UP)
 
+
+# ============================================================
+# PURCHASE SERIALIZATION
+# ============================================================
 
 def serialize_purchase(db: Session, purchase: Purchase) -> dict:
     lines = (
@@ -64,10 +88,14 @@ def serialize_purchase(db: Session, purchase: Purchase) -> dict:
         .all()
     )
 
-    supplier = db.query(Supplier).filter(
-        Supplier.id == purchase.supplier_id,
-        Supplier.campus_id == purchase.campus_id,
-    ).first()
+    supplier = (
+        db.query(Supplier)
+        .filter(
+            Supplier.id == purchase.supplier_id,
+            Supplier.campus_id == purchase.campus_id,
+        )
+        .first()
+    )
 
     return {
         "id": purchase.id,
@@ -97,11 +125,18 @@ def serialize_purchase(db: Session, purchase: Purchase) -> dict:
     }
 
 
+# ============================================================
+# CREATE PURCHASE
+# Permission: purchase_order.create
+# ============================================================
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_purchase(
     payload: PurchaseCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ACCOUNTS)),
+    user: User = Depends(
+        require_permission("purchase_order.create")
+    ),
 ):
     supplier = (
         db.query(Supplier)
@@ -112,6 +147,7 @@ def create_purchase(
         )
         .first()
     )
+
     if not supplier:
         raise HTTPException(
             status_code=404,
@@ -127,6 +163,7 @@ def create_purchase(
         )
         .first()
     )
+
     if duplicate:
         raise HTTPException(
             status_code=409,
@@ -137,6 +174,7 @@ def create_purchase(
     prepared_lines = []
 
     for line in payload.items:
+
         item = (
             db.query(Item)
             .filter(
@@ -146,6 +184,7 @@ def create_purchase(
             )
             .first()
         )
+
         if not item:
             raise HTTPException(
                 status_code=404,
@@ -161,6 +200,7 @@ def create_purchase(
             )
             .first()
         )
+
         if not selected_unit:
             raise HTTPException(
                 status_code=404,
@@ -176,6 +216,7 @@ def create_purchase(
             )
             .first()
         )
+
         if not standard_unit:
             raise HTTPException(
                 status_code=422,
@@ -188,8 +229,8 @@ def create_purchase(
                 detail=f"Unit dimension mismatch for item {item.name}",
             )
 
-        # Validate that a conversion to the item's standard unit exists.
-        # The entered quantity and unit are preserved on the purchase line.
+        # Validate conversion to the item's standard unit.
+        # The entered quantity and unit remain unchanged on the purchase line.
         get_unit_conversion_factor(
             db,
             user,
@@ -219,7 +260,9 @@ def create_purchase(
             detail="Discount cannot exceed the purchase subtotal",
         )
 
-    grand_total = money(subtotal - discount + extra_charges)
+    grand_total = money(
+        subtotal - discount + extra_charges
+    )
 
     purchase = Purchase(
         campus_id=user.campus_id,
@@ -267,23 +310,41 @@ def create_purchase(
 
     except IntegrityError:
         db.rollback()
+
         raise HTTPException(
             status_code=409,
-            detail="Purchase could not be saved because of a duplicate or invalid record",
+            detail=(
+                "Purchase could not be saved because of "
+                "a duplicate or invalid record"
+            ),
         )
 
-    return jsonable_encoder(serialize_purchase(db, purchase))
+    return jsonable_encoder(
+        serialize_purchase(db, purchase)
+    )
 
+
+# ============================================================
+# LIST PURCHASES
+# Permission: purchase_order.read
+# ============================================================
 
 @router.get("/")
 def list_purchases(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ACCOUNTS)),
+    user: User = Depends(
+        require_permission("purchase_order.read")
+    ),
 ):
     purchases = (
         db.query(Purchase)
-        .filter(Purchase.campus_id == user.campus_id)
-        .order_by(Purchase.purchase_date.desc(), Purchase.id.desc())
+        .filter(
+            Purchase.campus_id == user.campus_id
+        )
+        .order_by(
+            Purchase.purchase_date.desc(),
+            Purchase.id.desc(),
+        )
         .all()
     )
 
@@ -293,11 +354,18 @@ def list_purchases(
     ])
 
 
+# ============================================================
+# GET PURCHASE DETAILS
+# Permission: purchase_order.read
+# ============================================================
+
 @router.get("/{purchase_id}")
 def get_purchase(
     purchase_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ACCOUNTS)),
+    user: User = Depends(
+        require_permission("purchase_order.read")
+    ),
 ):
     purchase = (
         db.query(Purchase)
@@ -309,6 +377,11 @@ def get_purchase(
     )
 
     if not purchase:
-        raise HTTPException(status_code=404, detail="Purchase not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Purchase not found",
+        )
 
-    return jsonable_encoder(serialize_purchase(db, purchase))
+    return jsonable_encoder(
+        serialize_purchase(db, purchase)
+    )
