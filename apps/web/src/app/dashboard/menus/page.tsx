@@ -18,7 +18,7 @@ const config = {
   columns: [
     { key: "id", label: "ID" },
     { key: "name", label: "Menu" },
-    { key: "meal_session_id", label: "Meal session ID" },
+    { key: "meal_session_id", label: "Meal session", optionField: "meal_session_id" },
   ],
 };
 
