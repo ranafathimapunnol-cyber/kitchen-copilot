@@ -101,6 +101,11 @@ READ_ENDPOINTS = [
     "/api/purchases/",
 ]
 
+# Approved matrix: Kitchen Managers have no access to supplier bills.
+KITCHEN_MANAGER_DENIED_READ_ENDPOINTS = {
+    "/api/purchases/",
+}
+
 
 @pytest.mark.parametrize("endpoint", READ_ENDPOINTS)
 def test_admin_has_read_access_to_all_modules(
@@ -124,7 +129,11 @@ def test_kitchen_manager_has_approved_read_access(
 
     response = client.get(endpoint)
 
-    assert response.status_code == 200, (
+    expected = (
+        403 if endpoint in KITCHEN_MANAGER_DENIED_READ_ENDPOINTS else 200
+    )
+
+    assert response.status_code == expected, (
         f"KITCHEN_MANAGER accessing {endpoint}: "
         f"{response.status_code}: {response.text}"
     )

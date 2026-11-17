@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,7 +26,13 @@ from app.models.master_data import (
     Unit,
     UnitConversion,
 )
+from app.models.purchases import (
+    GoodsReceiptItem,
+    PurchaseItem,
+    StockMovement,
+)
 from app.models.user import User, UserRole
+from app.models.waste import WasteItem
 
 router = APIRouter(prefix="/api/master", tags=["Master Data"])
 
@@ -292,6 +299,20 @@ def get_unit_conversion_factor(
     )
 
 
+def ensure_supplier_write_allowed(user: User) -> None:
+    """Kitchen Managers have read-only access to suppliers.
+
+    Suppliers share the inventory.* permission codes with other master
+    data, so this rule cannot be expressed by the permission set alone.
+    """
+
+    if user.role == UserRole.KITCHEN_MANAGER:
+        raise HTTPException(
+            status_code=403,
+            detail="Kitchen Managers have read-only access to suppliers.",
+        )
+
+
 # ============================================================
 # CATEGORIES
 # ============================================================
@@ -382,6 +403,10 @@ def add_unit_conversion(
             detail="Conversions between different dimensions are not allowed.",
         )
 
+    ensure_conversion_pair_available(
+        db, user, data.from_unit_id, data.to_unit_id
+    )
+
     return create_record(
         UnitConversion,
         data.model_dump(),
@@ -456,6 +481,8 @@ def add_supplier(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("inventory.create")),
 ):
+    ensure_supplier_write_allowed(user)
+
     return create_record(
         Supplier, data.model_dump(), db, user, "SUPPLIER"
     )
@@ -750,6 +777,235 @@ def validate_master_values(
 
 
 # ============================================================
+# HISTORICAL INTEGRITY
+# A unit's dimension, an item's standard unit and a used conversion
+# give meaning to quantities already recorded. Once referenced, they
+# cannot be changed; historical records are never rewritten.
+# ============================================================
+
+def has_rows(query) -> bool:
+    return query.first() is not None
+
+
+def find_unit_references(db: Session, unit_id: int) -> list[str]:
+    checks = [
+        (
+            "items",
+            db.query(Item.id).filter(Item.standard_unit_id == unit_id),
+        ),
+        (
+            "unit conversions",
+            db.query(UnitConversion.id).filter(
+                or_(
+                    UnitConversion.from_unit_id == unit_id,
+                    UnitConversion.to_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "purchase lines",
+            db.query(PurchaseItem.id).filter(PurchaseItem.unit_id == unit_id),
+        ),
+        (
+            "menu standards",
+            db.query(MenuMainItem.id).filter(MenuMainItem.unit_id == unit_id),
+        ),
+        (
+            "stock movements",
+            db.query(StockMovement.id).filter(
+                StockMovement.unit_id == unit_id
+            ),
+        ),
+        (
+            "waste lines",
+            db.query(WasteItem.id).filter(WasteItem.unit_id == unit_id),
+        ),
+    ]
+
+    return [label for label, query in checks if has_rows(query)]
+
+
+def find_item_references(db: Session, item_id: int) -> list[str]:
+    checks = [
+        (
+            "purchase lines",
+            db.query(PurchaseItem.id).filter(PurchaseItem.item_id == item_id),
+        ),
+        (
+            "goods receipt lines",
+            db.query(GoodsReceiptItem.id)
+            .join(
+                PurchaseItem,
+                PurchaseItem.id == GoodsReceiptItem.purchase_item_id,
+            )
+            .filter(PurchaseItem.item_id == item_id),
+        ),
+        (
+            "stock movements",
+            db.query(StockMovement.id).filter(
+                StockMovement.item_id == item_id
+            ),
+        ),
+        (
+            "menu standards",
+            db.query(MenuMainItem.id).filter(MenuMainItem.item_id == item_id),
+        ),
+        (
+            "waste lines",
+            db.query(WasteItem.id).filter(WasteItem.item_id == item_id),
+        ),
+    ]
+
+    return [label for label, query in checks if has_rows(query)]
+
+
+def unit_pair_is_used(
+    db: Session,
+    campus_id: int,
+    unit_a: int,
+    unit_b: int,
+) -> bool:
+    """True when a purchase line or menu standard converts between the
+    two units, in either direction (line unit versus the item's standard
+    unit). This matches how get_unit_conversion_factor finds a factor."""
+
+    def used_by(model) -> bool:
+        return has_rows(
+            db.query(model.id)
+            .join(Item, Item.id == model.item_id)
+            .filter(
+                model.campus_id == campus_id,
+                or_(
+                    and_(
+                        model.unit_id == unit_a,
+                        Item.standard_unit_id == unit_b,
+                    ),
+                    and_(
+                        model.unit_id == unit_b,
+                        Item.standard_unit_id == unit_a,
+                    ),
+                ),
+            )
+        )
+
+    return used_by(PurchaseItem) or used_by(MenuMainItem)
+
+
+def ensure_conversion_unused(
+    db: Session,
+    conversion: UnitConversion,
+) -> None:
+    if unit_pair_is_used(
+        db,
+        conversion.campus_id,
+        conversion.from_unit_id,
+        conversion.to_unit_id,
+    ):
+        raise HTTPException(
+            409,
+            (
+                "This unit conversion is used by purchase lines or menu "
+                "standards, so it can no longer be edited or deleted."
+            ),
+        )
+
+
+def ensure_conversion_pair_available(
+    db: Session,
+    user: User,
+    from_unit_id: int,
+    to_unit_id: int,
+    exclude_id: int | None = None,
+) -> None:
+    """Applies to both creating and editing a conversion.
+
+    When the unit pair is already used, its existing conversion stays the
+    only one. A second conversion for the same units (in either direction)
+    would change the factor applied to recorded quantities.
+    """
+
+    if not unit_pair_is_used(db, user.campus_id, from_unit_id, to_unit_id):
+        return
+
+    existing = db.query(UnitConversion.id).filter(
+        UnitConversion.campus_id == user.campus_id,
+        or_(
+            and_(
+                UnitConversion.from_unit_id == from_unit_id,
+                UnitConversion.to_unit_id == to_unit_id,
+            ),
+            and_(
+                UnitConversion.from_unit_id == to_unit_id,
+                UnitConversion.to_unit_id == from_unit_id,
+            ),
+        ),
+    )
+
+    if exclude_id is not None:
+        existing = existing.filter(UnitConversion.id != exclude_id)
+
+    if has_rows(existing):
+        raise HTTPException(
+            409,
+            (
+                "These units already have a conversion that is used by "
+                "purchase lines or menu standards. Another conversion "
+                "between them would change recorded quantities."
+            ),
+        )
+
+
+def ensure_update_preserves_history(
+    resource: str,
+    record,
+    values: dict,
+    db: Session,
+    user: User,
+) -> None:
+    if resource == "units":
+        if values["dimension"] == record.dimension:
+            return
+
+        references = find_unit_references(db, record.id)
+
+        if references:
+            raise HTTPException(
+                409,
+                (
+                    "The unit's dimension cannot be changed because the "
+                    f"unit is used by: {', '.join(references)}. "
+                    "Create a new unit instead."
+                ),
+            )
+
+    elif resource == "items":
+        if values["standard_unit_id"] == record.standard_unit_id:
+            return
+
+        references = find_item_references(db, record.id)
+
+        if references:
+            raise HTTPException(
+                409,
+                (
+                    "The item's standard unit cannot be changed because "
+                    f"the item is used by: {', '.join(references)}. "
+                    "Recorded quantities depend on the current unit."
+                ),
+            )
+
+    elif resource == "unit-conversions":
+        ensure_conversion_unused(db, record)
+        ensure_conversion_pair_available(
+            db,
+            user,
+            values["from_unit_id"],
+            values["to_unit_id"],
+            exclude_id=record.id,
+        )
+
+
+# ============================================================
 # UPDATE MASTER RECORD
 # ============================================================
 
@@ -779,13 +1035,18 @@ def update_master_record(
             "You do not have permission to update this record.",
         )
 
+    if resource == "suppliers":
+        ensure_supplier_write_allowed(user)
+
     try:
         values = schema.model_validate(payload).model_dump()
 
     except ValidationError as exc:
+        # Encoded like FastAPI's own 422 responses on create, so values
+        # such as Decimal limits in the error context can be serialized.
         raise HTTPException(
             422,
-            detail=exc.errors(),
+            detail=jsonable_encoder(exc.errors(include_url=False)),
         )
 
     record = ensure_campus_record(
@@ -800,6 +1061,10 @@ def update_master_record(
 
     validate_master_values(
         resource, values, db, user
+    )
+
+    ensure_update_preserves_history(
+        resource, record, values, db, user
     )
 
     old_values = {
@@ -867,6 +1132,9 @@ def deactivate_master_record(
             403,
             "You do not have permission to deactivate this record.",
         )
+
+    if resource == "suppliers":
+        ensure_supplier_write_allowed(user)
 
     record = ensure_campus_record(
         model, record_id, db, user
@@ -945,6 +1213,11 @@ def delete_master_record(
     record = ensure_campus_record(
         model, record_id, db, user
     )
+
+    # Conversions have no foreign-key references, so the database alone
+    # would allow deleting one that recorded quantities depend on.
+    if resource == "unit-conversions":
+        ensure_conversion_unused(db, record)
 
     try:
         db.delete(record)

@@ -3,7 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, require_roles
+from app.api.dependencies import (
+    STAFF_ASSIGNABLE_PERMISSIONS,
+    get_current_user,
+    require_roles,
+)
 from app.db.session import get_db
 from app.models.authorization import (
     Module,
@@ -91,6 +95,9 @@ def get_active_staff_permissions(
             "module_id": row.module_id,
             "module_name": row.module_name,
             "module_code": row.module_code,
+            "assignable": (
+                row.permission_code in STAFF_ASSIGNABLE_PERMISSIONS
+            ),
         }
         for row in rows
     ]
@@ -168,6 +175,11 @@ def list_modules_and_permissions(
                     "id": permission.id,
                     "action": permission.action,
                     "permission_code": permission.permission_code,
+                    # Whether an ADMIN may assign it to a STAFF user.
+                    "assignable": (
+                        permission.permission_code
+                        in STAFF_ASSIGNABLE_PERMISSIONS
+                    ),
                 }
                 for permission in permissions
             ],
@@ -253,7 +265,7 @@ def update_staff_permissions(
 
     if selected_ids:
         existing_permissions = (
-            db.query(Permission.id)
+            db.query(Permission.id, Permission.permission_code)
             .filter(Permission.id.in_(selected_ids))
             .all()
         )
@@ -265,6 +277,28 @@ def update_staff_permissions(
                 status_code=422,
                 detail="One or more permission IDs are invalid.",
             )
+
+        not_assignable = sorted(
+            row.permission_code
+            for row in existing_permissions
+            if row.permission_code not in STAFF_ASSIGNABLE_PERMISSIONS
+        )
+
+        if not_assignable:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "These permissions cannot be assigned to staff: "
+                    f"{', '.join(not_assignable)}."
+                ),
+            )
+
+    assignable_ids = {
+        row.id
+        for row in db.query(Permission.id).filter(
+            Permission.permission_code.in_(STAFF_ASSIGNABLE_PERMISSIONS)
+        )
+    }
 
     assignments = (
         db.query(StaffAccessAssignment)
@@ -282,6 +316,7 @@ def update_staff_permissions(
     newly_assigned = []
     reactivated = []
     revoked = []
+    kept_not_assignable = []
 
     # Reactivate existing assignments or create new ones.
     for permission_id in selected_ids:
@@ -303,14 +338,22 @@ def update_staff_permissions(
             )
             newly_assigned.append(permission_id)
 
-    # Deactivate permissions that are no longer selected.
+    # Deactivate assignable permissions that are no longer selected.
+    # Older assignments that are no longer assignable are kept unchanged
+    # until a separately approved cleanup.
     for assignment in assignments:
         if (
-            assignment.is_active
-            and assignment.permission_id not in selected_ids
+            not assignment.is_active
+            or assignment.permission_id in selected_ids
         ):
-            assignment.is_active = False
-            revoked.append(assignment.permission_id)
+            continue
+
+        if assignment.permission_id not in assignable_ids:
+            kept_not_assignable.append(assignment.permission_id)
+            continue
+
+        assignment.is_active = False
+        revoked.append(assignment.permission_id)
 
     db.add(
         AuditLog(
@@ -324,7 +367,10 @@ def update_staff_permissions(
                 "newly_assigned": newly_assigned,
                 "reactivated": reactivated,
                 "revoked": revoked,
-                "active_permission_ids": sorted(selected_ids),
+                "kept_not_assignable": sorted(kept_not_assignable),
+                "active_permission_ids": sorted(
+                    selected_ids | set(kept_not_assignable)
+                ),
             },
         )
     )

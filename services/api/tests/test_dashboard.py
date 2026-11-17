@@ -80,7 +80,9 @@ def test_kitchen_manager_sees_operational_sections(client, db, setup_data):
     response = client.get(OVERVIEW_URL)
 
     assert response.status_code == 200, response.text
-    assert present_sections(response.json()) == DATA_SECTIONS
+    # Kitchen Managers have no access to supplier bills, so the
+    # purchases (spend) section is absent.
+    assert present_sections(response.json()) == DATA_SECTIONS - {"purchases"}
 
 
 def test_staff_without_dashboard_permission_is_denied(client, db, setup_data):

@@ -22,9 +22,9 @@ The database role enum `userrole` currently contains exactly three values.
 
 | Role | Access today |
 |---|---|
-| `ADMIN` | Every campus permission, staff permission assignment, user creation, permanent deletion of master data and waste records |
-| `KITCHEN_MANAGER` | The Kitchen Manager permission set (currently defined in code: `services/api/app/api/dependencies.py`) |
-| `STAFF` | Only the permissions individually assigned by an `ADMIN` of the same campus |
+| `ADMIN` | Every campus permission, staff permission assignment, creation of Kitchen Manager and Staff accounts, permanent deletion of master data and waste records |
+| `KITCHEN_MANAGER` | The Kitchen Manager permission set (currently defined in code: `services/api/app/api/dependencies.py`). Suppliers are read-only and supplier bills are not accessible (see section 5) |
+| `STAFF` | Only the permissions individually assigned by an `ADMIN` of the same campus, chosen from the staff-assignable list (see section 5) |
 
 Every user belongs to exactly one campus (`users.campus_id` is required).
 
@@ -394,7 +394,56 @@ erDiagram
   rejected quantities equal the received quantity.
 - Receipt quantities may not exceed the purchased quantity.
 - Only `ADMIN` can create users, assign staff permissions and permanently delete
-  records.
+  records. An `ADMIN` can create only `KITCHEN_MANAGER` and `STAFF` accounts,
+  always in the `ADMIN`'s own campus.
+
+### STAFF permission assignment
+
+- STAFF users receive nothing by default. An `ADMIN` assigns individual
+  permissions, chosen only from the staff-assignable list
+  (`STAFF_ASSIGNABLE_PERMISSIONS` in `services/api/app/api/dependencies.py`):
+  `dashboard.read`, `headcount.*`, `inventory.read`, `consumption.*`,
+  `outsourced_food.*`, `menu.read` and `waste_tracking.*`. Any other
+  permission is rejected (422), and the Staff Management page lists only
+  assignable permissions.
+- STAFF never receive `audit.read`, `menu.create` or `menu.update`; menus and
+  portion standards stay read-only. No current code covers stock-adjustment
+  approval.
+- `inventory.create`, `inventory.update` and `purchase_order.*` are not
+  assignable, because each also covers supplier writes, goods-receipt
+  acceptance or supplier bills. They become assignable once split into
+  separate codes.
+- Older assignments outside the list are kept unchanged, and keep working,
+  when an `ADMIN` saves a staff member's permissions. Removing them is a
+  separate, approved cleanup.
+
+### Kitchen Manager restrictions
+
+- Suppliers are read-only: creating, editing and deactivating a supplier are
+  rejected (403). Suppliers share the `inventory.*` codes with other master
+  data, so this is enforced on the supplier endpoints.
+- Supplier bills (`/api/purchases`) cannot be read or written. The current
+  `purchase_order.*` codes guard the bill endpoints, so they are not part of
+  the Kitchen Manager set. The Kitchen Manager's dashboard has no purchases
+  section, and bill entries are left out of its activity feed.
+- Goods receipts, stock movements, menus, waste and other master data are
+  unaffected.
+
+### Historical integrity
+
+Rejected changes return 409. Historical records are never rewritten.
+
+- A unit's dimension cannot change while the unit is referenced by items,
+  unit conversions, purchase lines, menu standards, stock movements or waste
+  lines.
+- An item's standard unit cannot change while the item is referenced by
+  purchase lines, goods receipt lines, stock movements, menu standards or waste
+  lines.
+- A unit conversion can be edited or deleted only until it is used, that is
+  until a purchase line or menu standard converts between its two units. A used
+  unit pair also cannot gain a second conversion in either direction.
+  Conversions are not versioned yet, so a used factor cannot be corrected.
+- Editing a master record applies the same validation as creating one.
 
 ## 6. Rules not yet enforced (planned)
 
@@ -410,8 +459,9 @@ erDiagram
 
 1. `ADMIN` creates a user account in their own campus.
 2. `ADMIN` opens Staff Management.
-3. `ADMIN` selects modules and individual actions.
-4. The system replaces the staff member's active assignments and records an audit entry.
+3. `ADMIN` selects individual actions from the staff-assignable permissions.
+4. The system replaces the staff member's active assignable permissions, keeps
+   any older non-assignable ones unchanged, and records an audit entry.
 5. Staff signs in and sees only authorized pages and actions.
 6. The backend validates every protected request.
 

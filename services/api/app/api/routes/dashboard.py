@@ -404,10 +404,22 @@ def dashboard_overview(
     # --------------------------------------------------
 
     if can_audit:
-        activity_rows = (
+        activity_query = (
             db.query(AuditLog, User.full_name)
             .outerjoin(User, User.id == AuditLog.user_id)
             .filter(AuditLog.campus_id == campus_id)
+        )
+
+        # Kitchen Managers have no access to supplier bills. Bill audit
+        # entries carry invoice numbers and totals, so they are left out
+        # of the Kitchen Manager's activity feed.
+        if result["role"] == UserRole.KITCHEN_MANAGER.value:
+            activity_query = activity_query.filter(
+                AuditLog.entity_type != "PURCHASE"
+            )
+
+        activity_rows = (
+            activity_query
             .order_by(AuditLog.created_at.desc())
             .limit(10)
             .all()

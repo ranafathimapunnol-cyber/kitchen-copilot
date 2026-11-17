@@ -22,6 +22,13 @@ from app.schemas.auth import LoginRequest, UserCreate, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
+# A campus ADMIN may create only these account types. ADMIN accounts are
+# provisioned separately (by the platform owner), never by another ADMIN.
+ADMIN_CREATABLE_ROLES = frozenset({
+    UserRole.KITCHEN_MANAGER,
+    UserRole.STAFF,
+})
+
 
 def set_auth_cookies(response: Response, user_id: int):
     response.set_cookie(
@@ -169,6 +176,14 @@ def create_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_roles(UserRole.ADMIN)),
 ):
+    if data.role not in ADMIN_CREATABLE_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Admins can create only Kitchen Manager and Staff accounts."
+            ),
+        )
+
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(
             status_code=409,
@@ -176,6 +191,7 @@ def create_user(
         )
 
     user = User(
+        # Always the creating ADMIN's campus; never taken from the request.
         campus_id=admin.campus_id,
         full_name=data.full_name,
         email=data.email,

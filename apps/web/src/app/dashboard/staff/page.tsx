@@ -20,6 +20,8 @@ type Permission = {
   id: number;
   action: "CREATE" | "READ" | "UPDATE";
   permission_code: string;
+  // Whether an ADMIN may assign this permission to a STAFF user.
+  assignable: boolean;
 };
 
 type PermissionModule = {
@@ -29,16 +31,19 @@ type PermissionModule = {
   permissions: Permission[];
 };
 
+type AssignedPermission = {
+  id: number;
+  permission_code: string;
+  action: string;
+  module_id: number;
+  module_name: string;
+  module_code: string;
+  assignable: boolean;
+};
+
 type StaffDetail = {
   staff: StaffMember;
-  permissions: {
-    id: number;
-    permission_code: string;
-    action: string;
-    module_id: number;
-    module_name: string;
-    module_code: string;
-  }[];
+  permissions: AssignedPermission[];
 };
 
 function getErrorMessage(error: unknown) {
@@ -52,6 +57,9 @@ export default function StaffManagementPage() {
   const [modules, setModules] = useState<PermissionModule[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([]);
+  // Older permissions that can no longer be assigned to staff. They are
+  // shown for information and kept unchanged when saving.
+  const [keptPermissions, setKeptPermissions] = useState<AssignedPermission[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -69,6 +77,31 @@ export default function StaffManagementPage() {
     () => staff.find((member) => member.id === selectedStaffId) ?? null,
     [staff, selectedStaffId]
   );
+
+  // Only permissions that may be assigned to staff are offered.
+  const assignableModules = useMemo(
+    () =>
+      modules
+        .map((module) => ({
+          ...module,
+          permissions: module.permissions.filter(
+            (permission) => permission.assignable
+          ),
+        }))
+        .filter((module) => module.permissions.length > 0),
+    [modules]
+  );
+
+  const applyStaffDetail = (detail: StaffDetail) => {
+    setSelectedPermissionIds(
+      detail.permissions
+        .filter((permission) => permission.assignable)
+        .map((permission) => permission.id)
+    );
+    setKeptPermissions(
+      detail.permissions.filter((permission) => !permission.assignable)
+    );
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -108,11 +141,10 @@ export default function StaffManagementPage() {
         `${ENDPOINTS.staff}/${member.id}`
       );
 
-      setSelectedPermissionIds(
-        detail.permissions.map((permission) => permission.id)
-      );
+      applyStaffDetail(detail);
     } catch (err) {
       setSelectedPermissionIds([]);
+      setKeptPermissions([]);
       setError(getErrorMessage(err));
     } finally {
       setDetailLoading(false);
@@ -168,19 +200,27 @@ export default function StaffManagementPage() {
     setError("");
     setSuccess("");
 
+    const assignableIds = new Set(
+      assignableModules.flatMap((module) =>
+        module.permissions.map((permission) => permission.id)
+      )
+    );
+
     try {
       await api.put(
         `${ENDPOINTS.staff}/${selectedStaffId}/permissions`,
-        { permission_ids: selectedPermissionIds }
+        {
+          permission_ids: selectedPermissionIds.filter((id) =>
+            assignableIds.has(id)
+          ),
+        }
       );
 
       const detail = await api.get<StaffDetail>(
         `${ENDPOINTS.staff}/${selectedStaffId}`
       );
 
-      setSelectedPermissionIds(
-        detail.permissions.map((permission) => permission.id)
-      );
+      applyStaffDetail(detail);
 
       setSuccess("Staff permissions saved successfully.");
     } catch (err) {
@@ -192,7 +232,7 @@ export default function StaffManagementPage() {
 
   const selectAllPermissions = () => {
     setSelectedPermissionIds(
-      modules.flatMap((module) =>
+      assignableModules.flatMap((module) =>
         module.permissions.map((permission) => permission.id)
       )
     );
@@ -412,7 +452,36 @@ export default function StaffManagementPage() {
                   </button>
                 </div>
 
-                {modules.map((module) => (
+                <p className="text-xs text-slate-500">
+                  Only permissions that may be assigned to staff are listed.
+                </p>
+
+                {keptPermissions.length > 0 && (
+                  <div
+                    role="note"
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                  >
+                    <p className="font-semibold">
+                      Older permissions kept until cleanup
+                    </p>
+                    <p className="mt-1 text-xs">
+                      These permissions can no longer be assigned to staff.
+                      Saving leaves them unchanged.
+                    </p>
+                    <ul className="mt-2 flex flex-wrap gap-2 text-xs">
+                      {keptPermissions.map((permission) => (
+                        <li
+                          key={permission.id}
+                          className="rounded-full bg-white px-2 py-1 font-medium"
+                        >
+                          {permission.module_name} · {permission.action}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {assignableModules.map((module) => (
                   <div
                     key={module.id}
                     className="overflow-hidden rounded-lg border border-slate-200"
@@ -440,12 +509,6 @@ export default function StaffManagementPage() {
                           {permission.action}
                         </label>
                       ))}
-
-                      {module.permissions.length === 0 && (
-                        <p className="text-xs text-slate-400">
-                          No configurable permissions.
-                        </p>
-                      )}
                     </div>
                   </div>
                 ))}

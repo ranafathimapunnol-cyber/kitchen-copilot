@@ -15,6 +15,16 @@ from app.models.authorization import Permission, StaffAccessAssignment
 # KITCHEN MANAGER PERMISSIONS
 # ============================================================
 
+# Approved matrix: Kitchen Managers have no access to supplier bills.
+# The current purchase_order.* codes guard the supplier bill endpoints
+# (/api/purchases), so they are deliberately not granted here. Real
+# purchase orders, which Kitchen Managers may use, will have their own
+# endpoints when they are built.
+#
+# Suppliers share the inventory.* codes with other master data, so the
+# Kitchen Manager's read-only supplier access is enforced on the supplier
+# endpoints themselves (see master_data.ensure_supplier_write_allowed).
+
 KITCHEN_MANAGER_PERMISSIONS = {
     "dashboard.read",
 
@@ -25,10 +35,6 @@ KITCHEN_MANAGER_PERMISSIONS = {
     "inventory.create",
     "inventory.read",
     "inventory.update",
-
-    "purchase_order.create",
-    "purchase_order.read",
-    "purchase_order.update",
 
     "consumption.create",
     "consumption.read",
@@ -48,6 +54,46 @@ KITCHEN_MANAGER_PERMISSIONS = {
     "waste_tracking.read",
     "waste_tracking.update",
 }
+
+
+# ============================================================
+# STAFF ASSIGNABLE PERMISSIONS
+# ============================================================
+
+# The only permissions an ADMIN may newly assign to a STAFF user, mapped
+# from the approved permission matrix onto today's codes. A code is listed
+# only when every action it unlocks may be assigned to STAFF individually:
+# - never assignable: audit.read, menu.create, menu.update (menu and
+#   portion standards stay read-only for STAFF);
+# - not assignable until split into separate codes: inventory.create and
+#   inventory.update (they also cover supplier writes and goods-receipt
+#   acceptance) and purchase_order.* (they guard supplier bills).
+# STAFF users never receive anything by default. Existing assignments
+# outside this list are kept unchanged until a separately approved cleanup.
+
+STAFF_ASSIGNABLE_PERMISSIONS = frozenset({
+    "dashboard.read",
+
+    "headcount.create",
+    "headcount.read",
+    "headcount.update",
+
+    "inventory.read",
+
+    "consumption.create",
+    "consumption.read",
+    "consumption.update",
+
+    "outsourced_food.create",
+    "outsourced_food.read",
+    "outsourced_food.update",
+
+    "menu.read",
+
+    "waste_tracking.create",
+    "waste_tracking.read",
+    "waste_tracking.update",
+})
 
 
 # ============================================================
