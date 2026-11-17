@@ -58,6 +58,16 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r services/api/requirements.txt
 
+      - name: Verify single Alembic migration head
+        working-directory: services/api
+        run: |
+          alembic heads
+          heads=$(alembic heads | grep -c '(head)')
+          if [ "$heads" -ne 1 ]; then
+            echo "Expected exactly one migration head, found $heads." >&2
+            exit 1
+          fi
+
       - name: Verify PostgreSQL and pgvector
         run: |
           python -c "import psycopg; conn=psycopg.connect('host=localhost port=5432 dbname=kitchen_copilot_ci user=postgres password=postgres'); conn.execute('CREATE EXTENSION IF NOT EXISTS vector'); conn.commit(); print('PostgreSQL and pgvector are ready')"

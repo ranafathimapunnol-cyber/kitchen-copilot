@@ -1,36 +1,61 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ChefHat } from "lucide-react";
-import Sidebar from "./Sidebar";
-import { useAuth } from "@/hooks/useAuth";
 
-export default function DashboardShell({
+import Sidebar from "./Sidebar";
+import {
+  AuthorizationProvider,
+  useAuthorization,
+} from "./AuthorizationContext";
+import { useAuth } from "@/hooks/useAuth";
+import { canAccessPath } from "@/lib/auth/permissions";
+import type { User } from "@/types";
+
+function LoadingWorkspace() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex items-center gap-3 text-sm text-slate-500">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+        Loading workspace...
+      </div>
+    </div>
+  );
+}
+
+function DashboardWorkspace({
+  user,
+  logout,
   children,
 }: {
+  user: User;
+  logout: () => Promise<void>;
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, loading, logout } = useAuth();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [loading, user, router]);
+  const {
+    permissions,
+    loading: permissionsLoading,
+  } = useAuthorization();
 
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="flex items-center gap-3 text-sm text-slate-500">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
-          Loading workspace...
-        </div>
-      </div>
-    );
+  const allowed = canAccessPath(
+    user.role,
+    pathname,
+    permissions
+  );
+
+  useEffect(() => {
+    if (!permissionsLoading && !allowed) {
+      router.replace("/dashboard");
+    }
+  }, [permissionsLoading, allowed, router]);
+
+  if (permissionsLoading || !allowed) {
+    return <LoadingWorkspace />;
   }
 
   return (
@@ -44,6 +69,8 @@ export default function DashboardShell({
       )}
 
       <Sidebar
+        role={user.role}
+        permissions={permissions}
         mobileOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
         onLogout={logout}
@@ -74,7 +101,9 @@ export default function DashboardShell({
 
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
-              {(user.full_name || user.email).charAt(0).toUpperCase()}
+              {(user.full_name || user.email)
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div className="hidden text-right sm:block">
@@ -93,5 +122,32 @@ export default function DashboardShell({
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading || !user) {
+    return <LoadingWorkspace />;
+  }
+
+  return (
+    <AuthorizationProvider userId={user.id}>
+      <DashboardWorkspace user={user} logout={logout}>
+        {children}
+      </DashboardWorkspace>
+    </AuthorizationProvider>
   );
 }

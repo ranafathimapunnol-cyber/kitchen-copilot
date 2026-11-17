@@ -1,12 +1,12 @@
 from decimal import Decimal
 
 from app.models import (
+    AuditLog,
     Campus,
     Category,
-    Unit,
     Item,
     Supplier,
-    AuditLog,
+    Unit,
 )
 from app.models.purchases import Purchase, PurchaseItem, StockMovement
 

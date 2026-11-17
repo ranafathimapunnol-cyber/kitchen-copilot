@@ -8,7 +8,18 @@ const config = {
   fields: [
     { name: "name", label: "Unit name", required: true, placeholder: "Kilogram" },
     { name: "symbol", label: "Symbol", required: true, placeholder: "kg" },
-    { name: "dimension", label: "Dimension", required: true, placeholder: "weight" },
+    {
+      name: "dimension",
+      label: "Dimension",
+      type: "select" as const,
+      required: true,
+      options: [
+        { value: "weight", label: "Weight" },
+        { value: "volume", label: "Volume" },
+        { value: "count", label: "Count" },
+        { value: "other", label: "Other" },
+      ],
+    },
   ],
   columns: [
     { key: "id", label: "ID" },

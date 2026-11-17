@@ -18,7 +18,6 @@ from spikes.ai.tool_calling import (
     run_tool_call,
 )
 
-
 # --------------------------------------------------
 # Tool calling tests
 # --------------------------------------------------

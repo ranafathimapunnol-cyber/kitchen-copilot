@@ -1,4 +1,9 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import ResourcePage from "@/components/shared/ResourcePage";
+import { useAuth } from "@/hooks/useAuth";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 
 const config = {
@@ -20,5 +25,21 @@ const config = {
 };
 
 export default function SuppliersPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  const canAccessSuppliers =
+    user && user.role === "ADMIN";
+
+  useEffect(() => {
+    if (!loading && user && !canAccessSuppliers) {
+      router.replace("/dashboard");
+    }
+  }, [loading, user, canAccessSuppliers, router]);
+
+  if (loading || !canAccessSuppliers) {
+    return null;
+  }
+
   return <ResourcePage config={config} />;
 }

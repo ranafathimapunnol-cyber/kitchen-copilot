@@ -75,22 +75,53 @@ async function sendRequest(
 }
 
 async function getErrorMessage(response: Response): Promise<string> {
-  let message = `Request failed (${response.status})`;
+  const fallback = `Request failed (${response.status})`;
 
   try {
-    const data = await response.json();
+    const data: unknown = await response.json();
 
-    message =
-      data.detail ||
-      data.message ||
-      (typeof data === "string" ? data : message);
+    if (!data || typeof data !== "object") {
+      return typeof data === "string" ? data : fallback;
+    }
+
+    const body = data as {
+      detail?: unknown;
+      message?: unknown;
+    };
+
+    const detail = body.detail;
+
+    if (typeof detail === "string") return detail;
+    if (typeof body.message === "string") return body.message;
+
+    if (Array.isArray(detail)) {
+      const messages = detail.map((item) => {
+        if (!item || typeof item !== "object") return "";
+
+        const error = item as {
+          loc?: unknown[];
+          msg?: string;
+        };
+
+        const field = error.loc
+          ?.filter((part) => part !== "body")
+          .map((part) => String(part).replaceAll("_", " "))
+          .join(" → ");
+
+        const label = field
+          ? field.replace(/\b\w/g, (letter) => letter.toUpperCase())
+          : "Input";
+
+        return error.msg ? `${label}: ${error.msg}` : "";
+      }).filter(Boolean);
+
+      if (messages.length) return messages.join(" ");
+    }
+
+    return fallback;
   } catch {
-    // Keep the default error message.
+    return fallback;
   }
-
-  return typeof message === "string"
-    ? message
-    : JSON.stringify(message);
 }
 
 /**

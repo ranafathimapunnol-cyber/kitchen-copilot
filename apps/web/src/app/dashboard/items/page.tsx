@@ -32,8 +32,8 @@ const config = {
   columns: [
     { key: "id", label: "ID" },
     { key: "name", label: "Item" },
-    { key: "category_id", label: "Category ID" },
-    { key: "standard_unit_id", label: "Standard unit ID" },
+    { key: "category_id", label: "Category", optionField: "category_id" },
+    { key: "standard_unit_id", label: "Standard unit", optionField: "standard_unit_id" },
     { key: "minimum_stock", label: "Minimum stock" },
   ],
 };

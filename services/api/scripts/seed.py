@@ -272,11 +272,11 @@ DEMO_CAMPUSES = [
     },
 ]
 
+# Only the three approved roles.
 ROLE_NAMES = {
     UserRole.ADMIN: "Demo Administrator",
     UserRole.KITCHEN_MANAGER: "Demo Kitchen Manager",
-    UserRole.STORE_KEEPER: "Demo Store Keeper",
-    UserRole.ACCOUNTS: "Demo Accounts User",
+    UserRole.STAFF: "Demo Staff",
 }
 
 
@@ -583,7 +583,7 @@ def seed_purchase_and_receipt(
     suppliers,
 ):
     admin = users[UserRole.ADMIN]
-    store_keeper = users[UserRole.STORE_KEEPER]
+    kitchen_manager = users[UserRole.KITCHEN_MANAGER]
 
     supplier = suppliers["Demo Grain Traders"]
 
@@ -700,7 +700,7 @@ def seed_purchase_and_receipt(
             remarks="Synthetic demonstration goods receipt",
             accepted_by=admin.id,
             accepted_at=datetime.now(UTC),
-            created_by=store_keeper.id,
+            created_by=kitchen_manager.id,
         )
 
         db.add(receipt)
@@ -768,7 +768,7 @@ def seed_purchase_and_receipt(
                 payment_method="BANK_TRANSFER",
                 reference_number=f"KC-DEMO-PAY-{campus.code}",
                 remarks="Synthetic partial payment",
-                created_by=users[UserRole.ACCOUNTS].id,
+                created_by=kitchen_manager.id,
             )
 
             db.add(payment)
@@ -926,7 +926,6 @@ def seed_demo():
                 "(90-day target)"
             )
 
-            # Five arguments only: units is not required here.
             seed_purchase_and_receipt(
                 db,
                 campus,
@@ -948,7 +947,7 @@ def seed_demo():
                 "(3-month history)"
             )
 
-            print("  Demo users: 4")
+            print("  Demo users: 3")
             print(f"  Categories: {len(CATEGORIES)}")
             print(f"  Units: {len(UNITS)}")
             print(

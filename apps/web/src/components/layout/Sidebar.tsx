@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { canAccessPath } from "@/lib/auth/permissions";
+
 import {
   LayoutDashboard,
   Tags,
@@ -10,33 +12,49 @@ import {
   Truck,
   Utensils,
   BookOpen,
+  Scale,
+  ListPlus,
+  Users,
   LogOut,
   ChefHat,
   X,
+  Recycle,
 } from "lucide-react";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Categories", href: "/dashboard/categories", icon: Tags },
   { label: "Units", href: "/dashboard/units", icon: Ruler },
+  { label: "Unit Conversions", href: "/dashboard/unit-conversions", icon: Scale },
   { label: "Items", href: "/dashboard/items", icon: Package },
   { label: "Suppliers", href: "/dashboard/suppliers", icon: Truck },
   { label: "Meal Sessions", href: "/dashboard/meal-sessions", icon: Utensils },
   { label: "Menus", href: "/dashboard/menus", icon: BookOpen },
+  { label: "Menu Main Items", href: "/dashboard/menu-main-items", icon: ListPlus },
+  { label: "Waste Tracking", href: "/dashboard/waste-tracking", icon: Recycle },
+  { label: "Staff Management", href: "/dashboard/staff", icon: Users },
 ];
 
 type SidebarProps = {
+  role: string;
+  permissions: string[];
   mobileOpen: boolean;
   onClose: () => void;
-  onLogout: () => void;
+  onLogout: () => Promise<void>;
 };
 
 export default function Sidebar({
+  role,
+  permissions,
   mobileOpen,
   onClose,
   onLogout,
 }: SidebarProps) {
   const pathname = usePathname();
+
+  const visibleNavigation = navigation.filter((item) =>
+    canAccessPath(role, item.href, permissions)
+  );
 
   return (
     <>
@@ -63,11 +81,14 @@ export default function Sidebar({
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
               <ChefHat size={23} />
             </div>
+
             <div>
               <p className="text-base font-bold tracking-wide">
                 Kitchen Copilot
               </p>
-              <p className="text-xs text-slate-400">Mess Management</p>
+              <p className="text-xs text-slate-400">
+                Mess Management
+              </p>
             </div>
           </Link>
 
@@ -86,8 +107,9 @@ export default function Sidebar({
             Main Menu
           </p>
 
-          {navigation.map((item) => {
+          {visibleNavigation.map((item) => {
             const Icon = item.icon;
+
             const active =
               pathname === item.href ||
               (item.href !== "/dashboard" &&

@@ -19,11 +19,13 @@ export type FieldConfig = {
   placeholder?: string;
   optionsEndpoint?: string;
   optionLabel?: string;
+  options?: SelectOption[];
 };
 
 export type ColumnConfig = {
   key: string;
   label: string;
+  optionField?: string;
 };
 
 export type ResourceConfig = {
