@@ -1,17 +1,32 @@
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
+
+import { Field, TextInput } from "./Field";
 
 type Props = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
+  hint?: ReactNode;
+  error?: string;
 };
 
-export default function Input({ label, className = "", ...props }: Props) {
+/** A labelled text input. For other controls use Field directly. */
+export default function Input({
+  label,
+  hint,
+  error,
+  required,
+  ...props
+}: Props) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <input
-        className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 ${className}`}
-        {...props}
-      />
-    </label>
+    <Field label={label} hint={hint} error={error} required={required}>
+      {({ id, describedBy }) => (
+        <TextInput
+          {...props}
+          id={id}
+          required={required}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+        />
+      )}
+    </Field>
   );
 }

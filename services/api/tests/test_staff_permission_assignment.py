@@ -30,6 +30,10 @@ EXPECTED_ASSIGNABLE = {
     "headcount.create", "headcount.read", "headcount.update",
     "inventory.read",
     "consumption.create", "consumption.read", "consumption.update",
+    # Decision S1 (23 November 2026), slice 4c: counts and adjustment requests.
+    "stock_count.create", "stock_count.read",
+    # Decision 5-1 (23 November 2026), Stage 5: meal records.
+    "meal.create", "meal.read", "meal.update",
     "outsourced_food.create", "outsourced_food.read",
     "outsourced_food.update",
     "menu.read",
@@ -45,6 +49,9 @@ NOT_ASSIGNABLE = [
     "purchase_order.create",
     "purchase_order.read",
     "purchase_order.update",
+    "purchase_bill.create",
+    "purchase_bill.read",
+    "purchase_bill.update",
 ]
 
 

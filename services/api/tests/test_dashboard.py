@@ -25,6 +25,7 @@ DATA_SECTIONS = {
     "headcount",
     "inventory",
     "purchases",
+    "payments",
     "receipts",
     "menus",
     "waste",
@@ -69,6 +70,9 @@ def test_admin_sees_every_section(client, db):
     payload = response.json()
     assert payload["role"] == "ADMIN"
     assert present_sections(payload) == DATA_SECTIONS
+    # Users and permissions are ADMIN-only, so only ADMIN sees the team
+    # overview.
+    assert "team" in payload
 
 
 def test_kitchen_manager_sees_operational_sections(client, db, setup_data):
@@ -80,9 +84,11 @@ def test_kitchen_manager_sees_operational_sections(client, db, setup_data):
     response = client.get(OVERVIEW_URL)
 
     assert response.status_code == 200, response.text
-    # Kitchen Managers have no access to supplier bills, so the
-    # purchases (spend) section is absent.
-    assert present_sections(response.json()) == DATA_SECTIONS - {"purchases"}
+    # Kitchen Managers have the same operational access as ADMIN,
+    # including supplier bills, payments and balances (confirmed role
+    # rules, 17 November 2026). The team overview stays ADMIN-only.
+    assert present_sections(response.json()) == DATA_SECTIONS
+    assert "team" not in response.json()
 
 
 def test_staff_without_dashboard_permission_is_denied(client, db, setup_data):

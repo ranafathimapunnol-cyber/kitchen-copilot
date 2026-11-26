@@ -1,1006 +1,386 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ElementType, ReactNode } from "react";
 import Link from "next/link";
 import {
-  Activity,
-  ArrowUpRight,
-  BookOpen,
-  Boxes,
-  ChefHat,
-  ClipboardList,
-  Clock3,
-  Coins,
-  Package,
-  Receipt,
-  Recycle,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CalendarRange,
+  ChartColumn,
+  ClipboardCheck,
+  CookingPot,
+  FileText,
+  LayoutDashboard,
+  PackageCheck,
   RefreshCw,
+  Soup,
   Users,
+  UtensilsCrossed,
+  Wallet,
+  Warehouse,
 } from "lucide-react";
 
 import { api } from "@/lib/api/client";
+import { DASHBOARD_OVERVIEW_ENDPOINT } from "@/lib/api/endpoints";
+import { canAccessPath } from "@/lib/auth/permissions";
+import { percentText, type DashboardOverview } from "@/lib/dashboard";
+import { errorMessage, formatDateTime, formatDay, formatRupees } from "@/lib/payments";
+import { plainQuantity } from "@/lib/stockMath";
 import { useAuthorization } from "@/components/layout/AuthorizationContext";
+import AreaChart from "@/components/charts/AreaChart";
+import BarList from "@/components/charts/BarList";
+import { SERIES } from "@/components/charts/tokens";
+import Badge, { StatusBadge, humanize } from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import PageHeader from "@/components/ui/PageHeader";
+import StatCard from "@/components/ui/StatCard";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 
-type TrendPoint = {
-  date: string;
-  count?: number;
-  estimated_cost?: number;
-};
+const SHORTCUTS: { label: string; href: string; icon: ElementType }[] = [
+  { label: "Record a meal", href: "/dashboard/meals/new", icon: UtensilsCrossed },
+  { label: "New kitchen issue", href: "/dashboard/kitchen-issues/new", icon: CookingPot },
+  { label: "Record stock count", href: "/dashboard/stock-counts/new", icon: ClipboardCheck },
+  { label: "Stock balances", href: "/dashboard/stock", icon: Warehouse },
+  { label: "New meal plan", href: "/dashboard/meal-plans/new", icon: CalendarRange },
+  { label: "Outsourced food", href: "/dashboard/outsourced-food", icon: Soup },
+  { label: "New supplier bill", href: "/dashboard/supplier-bills/new", icon: FileText },
+  { label: "Goods receipt", href: "/dashboard/receipts/new", icon: PackageCheck },
+  { label: "Spending analysis", href: "/dashboard/analytics", icon: ChartColumn },
+  { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+];
 
-type Purchase = {
-  id: number;
-  invoice_number?: string | null;
-  purchase_date: string;
-  grand_total: number | string;
-  status: string;
-};
-
-type ReceiptRecord = {
-  id: number;
-  purchase_id: number;
-  receipt_date: string;
-  status: string;
-};
-
-type StockMovement = {
-  id: number;
-  item_name: string;
-  movement_type: string;
-  quantity: number | string;
-  unit: string;
-  created_at: string;
-};
-
-type MenuRecord = {
-  id: number;
-  name: string;
-  meal_session: string;
-};
-
-type WasteRecord = {
-  id: number;
-  waste_date: string;
-  notes?: string | null;
-};
-
-type ActivityRecord = {
-  id: number;
-  user_name: string;
-  action: string;
-  entity_type: string;
-  entity_id?: number | null;
-  details?: Record<string, unknown> | null;
-  created_at: string;
-};
-
-type DashboardData = {
-  campus_id: number;
-  role: string;
-  generated_at: string;
-  permissions: string[];
-  kpis: Record<string, number | string | null>;
-  headcount?: {
-    today: number | null;
-    trend: TrendPoint[];
-  };
-  inventory?: {
-    active_items: number;
-    active_suppliers: number;
-    recent_movements: StockMovement[];
-  };
-  purchases?: {
-    count_this_month: number;
-    total_this_month: number | string;
-    recent: Purchase[];
-  };
-  receipts?: {
-    count_this_month: number;
-    recent: ReceiptRecord[];
-  };
-  menus?: {
-    active_count: number;
-    recent: MenuRecord[];
-  };
-  waste?: {
-    records_today: number;
-    quantity_today: number | string;
-    estimated_cost_today: number | string;
-    cost_trend: TrendPoint[];
-    recent: WasteRecord[];
-  };
-  activity?: ActivityRecord[];
-};
-
-const moneyFormatter = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0,
-});
-
-const numberFormatter = new Intl.NumberFormat("en-IN");
-
-function toNumber(value: unknown): number {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function formatMoney(value: unknown): string {
-  return moneyFormatter.format(toNumber(value));
-}
-
-function formatCompactMoney(value: unknown): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(toNumber(value));
-}
-
-function formatNumber(value: unknown): string {
-  return numberFormatter.format(toNumber(value));
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-
-  const parts = value.split("-").map(Number);
-
-  if (parts.length === 3 && parts.every(Number.isFinite)) {
-    const [year, month, day] = parts;
-    return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  }
-
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-}
-
-function formatDateTime(value?: string | null): string {
-  if (!value) return "—";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function readable(value?: string | null): string {
-  if (!value) return "—";
-
-  return value
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function canRead(
-  permissions: string[],
-  code: string,
-  role: string,
-): boolean {
-  return role === "ADMIN" || permissions.includes(code);
-}
-
-function StatusBadge({ value }: { value: string }) {
-  const status = value.toUpperCase();
-
-  let style = "bg-slate-100 text-slate-600";
-
-  if (
-    ["COMPLETED", "ACCEPTED", "ACTIVE", "APPROVED", "RECEIVED"].includes(
-      status,
-    )
-  ) {
-    style = "bg-blue-50 text-blue-700";
-  } else if (
-    ["PENDING", "DRAFT", "PARTIAL", "PROCESSING"].includes(status)
-  ) {
-    style = "bg-amber-50 text-amber-700";
-  } else if (
-    ["REJECTED", "CANCELLED", "FAILED"].includes(status)
-  ) {
-    style = "bg-red-50 text-red-700";
-  }
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${style}`}
-    >
-      {readable(value)}
-    </span>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  icon: Icon,
-  children,
-  action,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-  action?: React.ReactNode;
+function Panel({ title, subtitle, icon, href, linkLabel, children }: {
+  title: string; subtitle?: string; icon: ElementType; href?: string; linkLabel?: string; children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-            <Icon size={18} />
-          </div>
-
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-slate-900">
-              {title}
-            </h2>
-
-            {subtitle && (
-              <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
-            )}
-          </div>
-        </div>
-
-        {action}
-      </div>
-
-      <div className="p-5">{children}</div>
-    </section>
+    <Card className="flex min-w-0 flex-col">
+      <CardHeader title={title} subtitle={subtitle} icon={icon}
+        action={href ? (
+          <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
+            {linkLabel ?? "Open"} <ArrowRight size={14} aria-hidden />
+          </Link>
+        ) : undefined} />
+      <div className="flex-1 px-5 pb-5">{children}</div>
+    </Card>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function Row({ children, href }: { children: ReactNode; href?: string }) {
+  const body = <div className="flex items-center justify-between gap-3 py-2 text-sm">{children}</div>;
   return (
-    <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
-      {message}
-    </div>
+    <li className="border-b border-slate-100 last:border-0">
+      {href ? <Link href={href} className="block rounded hover:bg-slate-50">{body}</Link> : body}
+    </li>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ElementType;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">{title}</p>
-          <p className="mt-3 break-words text-2xl font-bold tracking-tight text-slate-900">
-            {value}
-          </p>
-          <p className="mt-2 text-xs text-slate-400">{description}</p>
-        </div>
-
-        <div className="shrink-0 rounded-xl bg-blue-50 p-3 text-blue-700">
-          <Icon size={21} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TrendChart({
-  points,
-  valueKey,
-  valueFormatter,
-}: {
-  points: TrendPoint[];
-  valueKey: "count" | "estimated_cost";
-  valueFormatter: (value: unknown) => string;
-}) {
-  if (!points.length) {
-    return <EmptyState message="No trend data available yet." />;
-  }
-
-  const values = points.map((point) => toNumber(point[valueKey]));
-  const maximum = Math.max(...values, 1);
-
-  return (
-    <div className="pt-2">
-      <div className="flex h-44 items-end gap-2">
-        {points.map((point, index) => {
-          const value = toNumber(point[valueKey]);
-          const height = Math.max(5, (value / maximum) * 100);
-
-          return (
-            <div
-              key={`${point.date}-${index}`}
-              className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
-            >
-              <span className="max-w-full truncate text-[10px] font-medium text-slate-500">
-                {valueFormatter(value)}
-              </span>
-
-              <div className="flex h-full w-full items-end overflow-hidden rounded-t-md bg-slate-50">
-                <div
-                  className="w-full rounded-t-md bg-blue-600 transition-all duration-300"
-                  style={{ height: `${height}%` }}
-                  title={`${formatDate(point.date)}: ${valueFormatter(value)}`}
-                />
-              </div>
-
-              <span className="text-[10px] text-slate-400">
-                {new Date(`${point.date}T00:00:00`).toLocaleDateString(
-                  "en-IN",
-                  { day: "2-digit", month: "short" },
-                )}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="py-3 text-sm text-slate-500">{children}</p>;
 }
 
 export default function DashboardPage() {
-  const { role, permissions, loading: authLoading, error: authError } =
-    useAuthorization();
-
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { role, permissions } = useAuthorization();
+  const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadedKey, setLoadedKey] = useState(-1);
+  const loading = loadedKey !== reloadKey;
+  const load = () => setReloadKey((key) => key + 1);
 
-  const normalizedRole = role.toUpperCase();
-  const isAdmin = normalizedRole === "ADMIN";
-
-  const hasDashboardAccess =
-    isAdmin || permissions.includes("dashboard.read");
-
-  // Fetches the dashboard and stores the result. State is updated only in
-  // the promise callbacks, so this is safe to call from an effect.
-  function fetchDashboard() {
-    return api
-      .get<DashboardData>("/api/dashboard/overview")
-      .then((response) => {
-        setData(response);
-        setError("");
-      })
-      .catch((err: unknown) => {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load dashboard data.",
-        );
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }
-
-  // Used by the "Try again" and "Refresh data" buttons.
-  function loadDashboard() {
-    setLoading(true);
-    setError("");
-    return fetchDashboard();
-  }
+  // Without the dashboard code the overview is refused (403): show the
+  // welcome state and the user's shortcuts instead of an error.
+  const canReadDashboard = role === "ADMIN" || role === "KITCHEN_MANAGER" || permissions.includes("dashboard.read");
 
   useEffect(() => {
-    if (authLoading || !hasDashboardAccess) return;
+    if (!canReadDashboard) return;
+    let active = true;
+    api.get<DashboardOverview>(DASHBOARD_OVERVIEW_ENDPOINT)
+      .then((response) => { if (active) { setData(response); setError(""); } })
+      .catch((err: unknown) => active && setError(errorMessage(err, "Unable to load the dashboard.")))
+      .finally(() => active && setLoadedKey(reloadKey));
+    return () => { active = false; };
+  }, [reloadKey, canReadDashboard]);
 
-    void fetchDashboard();
+  const header = (
+    <PageHeader eyebrow="Overview" icon={LayoutDashboard} title="Dashboard"
+      description="Today's meals, stock, planning, outsourced food and spending for your campus."
+      meta={data ? (
+        <span className="flex flex-wrap gap-2">
+          <Badge tone="brand">{humanize(data.role)}</Badge>
+          {data.campus_name && <Badge>{data.campus_name}</Badge>}
+        </span>
+      ) : undefined}
+      actions={<Button variant="secondary" icon={<RefreshCw size={15} aria-hidden />} loading={loading} onClick={load}>Refresh</Button>} />
+  );
 
-    // Refresh when the authenticated role or permission list changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, hasDashboardAccess, role, permissions.join(",")]);
-
-  // Without dashboard access no request is made, so do not wait for one;
-  // the access message below is shown instead.
-  if (authLoading || (hasDashboardAccess && loading)) {
+  if (!canReadDashboard && role) {
+    const mine = SHORTCUTS.filter((s) => canAccessPath(role, s.href, permissions));
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-slate-500">
-          <RefreshCw className="animate-spin text-blue-600" size={18} />
-          Loading kitchen operations...
-        </div>
+      <div className="space-y-6 pb-6">
+        <PageHeader eyebrow="Overview" icon={LayoutDashboard} title="Welcome to Kitchen Copilot"
+          description="Your account has no dashboard figures assigned. Use the menu or the shortcuts below." />
+        <Card data-dashboard-welcome>
+          {mine.length === 0 ? (
+            <EmptyState icon={LayoutDashboard} title="Nothing to show yet"
+              description="Your account has no modules assigned yet. An Admin can assign the modules you work with." />
+          ) : (
+            <ul className="grid grid-cols-2 gap-2 p-5 sm:grid-cols-3 lg:grid-cols-5">
+              {mine.map((s) => (
+                <li key={s.href}>
+                  <Link href={s.href} className="flex h-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-700 hover:border-brand-200 hover:bg-brand-50">
+                    <s.icon size={16} className="shrink-0 text-brand-600" aria-hidden /><span className="min-w-0">{s.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     );
   }
 
-  if (authError) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Unable to load your permissions: {authError}
-      </div>
-    );
-  }
-
-  if (!hasDashboardAccess) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-        <ChefHat className="mx-auto mb-3 text-slate-400" size={32} />
-        <h2 className="font-semibold text-slate-900">
-          Dashboard access not assigned
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Please contact your Admin to request dashboard access.
-        </p>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-        <p className="text-sm text-red-700">
-          {error || "Dashboard data is unavailable."}
-        </p>
-
-        <button
-          onClick={() => void loadDashboard()}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-        >
-          <RefreshCw size={15} />
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  const dashboardPermissions = data.permissions ?? permissions;
-  const dashboardRole = data.role || normalizedRole;
-
-  const showHeadcount = canRead(
-    dashboardPermissions,
-    "headcount.read",
-    dashboardRole,
-  );
-  const showInventory = canRead(
-    dashboardPermissions,
-    "inventory.read",
-    dashboardRole,
-  );
-  const showPurchases = canRead(
-    dashboardPermissions,
-    "purchase_order.read",
-    dashboardRole,
-  );
-  const showMenus = canRead(
-    dashboardPermissions,
-    "menu.read",
-    dashboardRole,
-  );
-  const showWaste = canRead(
-    dashboardPermissions,
-    "waste_tracking.read",
-    dashboardRole,
-  );
-  const showAudit = canRead(
-    dashboardPermissions,
-    "audit.read",
-    dashboardRole,
+  if (error && !data) return <div className="space-y-6 pb-6">{header}<Card><ErrorState title="Couldn't load the dashboard" message={error} onRetry={load} /></Card></div>;
+  if (!data) return (
+    <div className="space-y-6 pb-6">{header}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}</div>
+    </div>
   );
 
-  const statCards = [
-    ...(showHeadcount
-      ? [
-          {
-            title: "Today's Headcount",
-            value:
-              data.headcount?.today == null
-                ? "—"
-                : formatNumber(data.headcount.today),
-            description: "Student count recorded today",
-            icon: Users,
-          },
-        ]
-      : []),
-    ...(showInventory
-      ? [
-          {
-            title: "Active Inventory Items",
-            value: formatNumber(data.inventory?.active_items),
-            description: `${formatNumber(data.inventory?.active_suppliers)} active suppliers`,
-            icon: Package,
-          },
-        ]
-      : []),
-    ...(showPurchases
-      ? [
-          {
-            title: "Purchases This Month",
-            value: formatNumber(data.purchases?.count_this_month),
-            description: formatMoney(data.purchases?.total_this_month),
-            icon: Receipt,
-          },
-        ]
-      : []),
-    ...(showWaste
-      ? [
-          {
-            title: "Today's Waste Cost",
-            value: formatMoney(data.waste?.estimated_cost_today),
-            description: `${formatNumber(data.waste?.records_today)} waste records today`,
-            icon: Recycle,
-          },
-        ]
-      : []),
-  ];
-
-  const quickActions = [
-    ...(showInventory
-      ? [
-          {
-            label: "Inventory",
-            href: "/dashboard/items",
-            icon: Boxes,
-          },
-        ]
-      : []),
-    ...(showMenus
-      ? [
-          {
-            label: "Menus",
-            href: "/dashboard/menus",
-            icon: BookOpen,
-          },
-        ]
-      : []),
-    ...(showWaste
-      ? [
-          {
-            label: "Waste Tracking",
-            href: "/dashboard/waste-tracking",
-            icon: Recycle,
-          },
-        ]
-      : []),
-  ];
+  const { headcount, stock, meals, planning, outsourced, spending, payments, kitchen, counts } = data;
+  const shortcuts = SHORTCUTS.filter((s) => canAccessPath(role, s.href, permissions));
+  const attention: { label: string; href: string; count: number }[] = [
+    { label: "Meal records from earlier days still open", href: "/dashboard/meals", count: meals?.awaiting_close_count ?? 0 },
+    { label: "Stock adjustments waiting for approval", href: "/dashboard/stock-adjustments", count: counts?.pending_adjustments ?? 0 },
+    { label: "Draft kitchen issues to confirm", href: "/dashboard/kitchen-issues", count: kitchen?.draft_issues ?? 0 },
+    { label: "Draft outsourced deliveries to confirm", href: "/dashboard/outsourced-food", count: outsourced?.draft_deliveries ?? 0 },
+    { label: "Outsourced food waiting for its meal record", href: "/dashboard/outsourced-food", count: outsourced?.waiting_for_meal_record ?? 0 },
+    { label: "Draft meal plans", href: "/dashboard/meal-plans", count: planning?.draft_plans ?? 0 },
+    { label: "Draft portion standards to approve", href: "/dashboard/portion-standards", count: planning?.draft_standards ?? 0 },
+  ].filter((a) => a.count > 0 && canAccessPath(role, a.href, permissions));
+  const noSections = !headcount && !stock && !meals && !planning && !outsourced && !spending && !payments;
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Page heading */}
-      <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
-            Kitchen Operations
-          </p>
+    <div className="space-y-6 pb-6" data-dashboard>
+      {header}
+      {error && <p className="text-sm text-red-700">{error}</p>}
 
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Dashboard
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Your kitchen operations at a glance.
-          </p>
-
-          <p className="mt-2 text-xs font-medium text-slate-400">
-            {readable(dashboardRole)} · Campus #{data.campus_id}
-          </p>
-        </div>
-
-        <button
-          onClick={() => void loadDashboard()}
-          className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700"
-        >
-          <RefreshCw size={15} />
-          Refresh data
-        </button>
-      </section>
-
-      {/* KPI cards */}
-      {statCards.length > 0 ? (
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {statCards.map((card) => (
-            <StatCard key={card.title} {...card} />
-          ))}
-        </section>
-      ) : (
-        <EmptyState message="No operational modules have been assigned to your account yet." />
-      )}
-
-      {/* Quick actions */}
-      {quickActions.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">
-              Quick access
-            </h2>
-            <span className="text-xs text-slate-400">
-              Your available modules
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {quickActions.map(({ label, href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="group flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                    <Icon size={18} />
-                  </span>
-                  <span className="truncate text-sm font-semibold text-slate-700">
-                    {label}
-                  </span>
-                </span>
-                <ArrowUpRight
-                  size={16}
-                  className="shrink-0 text-slate-400 group-hover:text-blue-700"
-                />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Trends */}
-      {(showHeadcount || showWaste) && (
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {showHeadcount && (
-            <Panel
-              title="Headcount trend"
-              subtitle="Daily student count · Last 7 days"
-              icon={Users}
-            >
-              <TrendChart
-                points={data.headcount?.trend ?? []}
-                valueKey="count"
-                valueFormatter={(value) => formatNumber(value)}
-              />
-            </Panel>
-          )}
-
-          {showWaste && (
-            <Panel
-              title="Waste cost trend"
-              subtitle="Estimated waste cost · Last 7 days"
-              icon={Recycle}
-            >
-              <TrendChart
-                points={data.waste?.cost_trend ?? []}
-                valueKey="estimated_cost"
-                valueFormatter={(value) => formatCompactMoney(value)}
-              />
-            </Panel>
-          )}
-        </section>
-      )}
-
-      {/* Purchases and receipts */}
-      {(showPurchases || showInventory) && (
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {showPurchases && (
-            <Panel
-              title="Recent purchases"
-              subtitle={`${formatNumber(data.purchases?.count_this_month)} purchases this month · ${formatMoney(data.purchases?.total_this_month)}`}
-              icon={Receipt}
-            >
-              {data.purchases?.recent.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[420px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-xs text-slate-400">
-                        <th className="pb-3 font-medium">Invoice</th>
-                        <th className="pb-3 font-medium">Date</th>
-                        <th className="pb-3 text-right font-medium">Amount</th>
-                        <th className="pb-3 text-right font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.purchases.recent.map((purchase) => (
-                        <tr
-                          key={purchase.id}
-                          className="border-b border-slate-50 last:border-0"
-                        >
-                          <td className="py-3 font-semibold text-slate-700">
-                            {purchase.invoice_number || `#${purchase.id}`}
-                          </td>
-                          <td className="py-3 text-xs text-slate-500">
-                            {formatDate(purchase.purchase_date)}
-                          </td>
-                          <td className="py-3 text-right font-medium text-slate-700">
-                            {formatMoney(purchase.grand_total)}
-                          </td>
-                          <td className="py-3 text-right">
-                            <StatusBadge value={purchase.status} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState message="No purchases recorded yet." />
-              )}
-            </Panel>
-          )}
-
-          {showInventory && (
-            <Panel
-              title="Goods receipts"
-              subtitle={`${formatNumber(data.receipts?.count_this_month)} receipts this month`}
-              icon={ClipboardList}
-            >
-              {data.receipts?.recent.length ? (
-                <div className="space-y-3">
-                  {data.receipts.recent.map((receipt) => (
-                    <div
-                      key={receipt.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="rounded-lg bg-slate-50 p-2 text-slate-500">
-                          <Receipt size={17} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">
-                            Receipt #{receipt.id}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Purchase #{receipt.purchase_id} · {formatDate(receipt.receipt_date)}
-                          </p>
-                        </div>
-                      </div>
-                      <StatusBadge value={receipt.status} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState message="No goods receipts recorded yet." />
-              )}
-            </Panel>
-          )}
-        </section>
-      )}
-
-      {/* Inventory movements and menus */}
-      {(showInventory || showMenus) && (
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {showInventory && (
-            <Panel
-              title="Recent inventory movements"
-              subtitle="Latest recorded stock movements"
-              icon={Boxes}
-            >
-              {data.inventory?.recent_movements.length ? (
-                <div className="space-y-3">
-                  {data.inventory.recent_movements.map((movement) => (
-                    <div
-                      key={movement.id}
-                      className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                          <Package size={17} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-800">
-                            {movement.item_name}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            {readable(movement.movement_type)} · {formatDateTime(movement.created_at)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <span className="shrink-0 text-sm font-bold text-slate-700">
-                        {formatNumber(movement.quantity)} {movement.unit}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState message="No inventory movements recorded yet." />
-              )}
-            </Panel>
-          )}
-
-          {showMenus && (
-            <Panel
-              title="Active menus"
-              subtitle={`${formatNumber(data.menus?.active_count)} active menus`}
-              icon={BookOpen}
-            >
-              {data.menus?.recent.length ? (
-                <div className="space-y-3">
-                  {data.menus.recent.map((menu) => (
-                    <div
-                      key={menu.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                          <ChefHat size={17} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-800">
-                            {menu.name}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            {menu.meal_session}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
-                        Active
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState message="No active menus found." />
-              )}
-            </Panel>
-          )}
-        </section>
-      )}
-
-      {/* Waste overview */}
-      {showWaste && (
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                <Recycle size={19} />
-              </div>
-              <p className="text-sm font-semibold text-slate-700">
-                Waste recorded today
-              </p>
-            </div>
-
-            <p className="mt-4 text-2xl font-bold text-slate-900">
-              {formatNumber(data.waste?.records_today)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Waste records
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                <Boxes size={19} />
-              </div>
-              <p className="text-sm font-semibold text-slate-700">
-                Waste quantity today
-              </p>
-            </div>
-
-            <p className="mt-4 text-2xl font-bold text-slate-900">
-              {formatNumber(data.waste?.quantity_today)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Combined quantity across recorded units
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                <Coins size={19} />
-              </div>
-              <p className="text-sm font-semibold text-slate-700">
-                Estimated cost today
-              </p>
-            </div>
-
-            <p className="mt-4 text-2xl font-bold text-slate-900">
-              {formatMoney(data.waste?.estimated_cost_today)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Based on recorded waste estimates
-            </p>
-          </div>
-        </section>
-      )}
-
-      {/* Recent waste records */}
-      {showWaste && (
-        <Panel
-          title="Recent waste records"
-          subtitle="Latest recorded waste entries"
-          icon={Recycle}
-        >
-          {data.waste?.recent.length ? (
-            <div className="space-y-3">
-              {data.waste.recent.map((record) => (
-                <div
-                  key={record.id}
-                  className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">
-                      Waste record #{record.id}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-slate-400">
-                      {record.notes || "No notes added"}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs text-slate-500">
-                    {formatDate(record.waste_date)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="No waste records available yet." />
-          )}
-        </Panel>
-      )}
-
-      {/* Audit activity */}
-      {showAudit && (
-        <Panel
-          title="Recent system activity"
-          subtitle="Latest audit log entries"
-          icon={Activity}
-        >
-          {data.activity?.length ? (
-            <div className="space-y-4">
-              {data.activity.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex gap-3"
-                >
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                    <Activity size={16} />
-                  </div>
-
-                  <div className="min-w-0 flex-1 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-800">
-                        {activity.user_name}
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        {formatDateTime(activity.created_at)}
-                      </span>
-                    </div>
-
-                    <p className="mt-1 text-sm text-slate-600">
-                      {readable(activity.action)}{" "}
-                      <span className="font-medium text-slate-800">
-                        {readable(activity.entity_type)}
-                      </span>
-                      {activity.entity_id != null &&
-                        ` #${activity.entity_id}`}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="No recent audit activity available." />
-          )}
-        </Panel>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 text-xs text-slate-400">
-        <span className="flex items-center gap-2">
-          <Clock3 size={13} />
-          Data generated: {formatDateTime(data.generated_at)}
-        </span>
-        <span>Campus-scoped dashboard</span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {headcount && (
+          <StatCard label="Today's headcount" icon={Users} accent={SERIES.blue}
+            value={headcount.today === null ? "—" : headcount.today.toLocaleString("en-IN")}
+            description={headcount.today === null ? "No meal recorded today"
+              : headcount.today_basis === "actual" ? "People served at the largest meal" : "Expected at the largest meal"}
+            trend={headcount.trend.map((t) => t.count ?? 0)} />
+        )}
+        {stock && (
+          <StatCard label="Below minimum stock" icon={Warehouse} accent={SERIES.orange}
+            value={String(stock.below_minimum)} description={`${stock.out_of_stock} of ${stock.items_tracked} items at zero`} />
+        )}
+        {spending && (
+          <StatCard label="Purchases this month" icon={Wallet} value={formatRupees(spending.current)}
+            description={`${percentText(spending.change_percent)} vs ${formatDay(spending.periods.previous.date_from)} – ${formatDay(spending.periods.previous.date_to)}`} />
+        )}
+        {payments && (
+          <StatCard label="Outstanding payables" icon={FileText} value={formatRupees(payments.outstanding)}
+            description={`${payments.open_bill_count} open bills · ${payments.suppliers_owed} suppliers`} />
+        )}
+        {!spending && meals && (
+          <StatCard label="Open meal records" icon={UtensilsCrossed} value={String(meals.open_count)}
+            description={`${meals.awaiting_close_count} from earlier days`} />
+        )}
+        {!payments && outsourced && (
+          <StatCard label="Outsourced orders (±2 days)" icon={Soup} value={String(outsourced.orders.length)}
+            description={`${outsourced.draft_deliveries} deliveries to confirm`} />
+        )}
       </div>
+
+      {attention.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50" data-attention>
+          <CardHeader title="Needs attention" icon={AlertTriangle} />
+          <ul className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2">
+            {attention.map((a) => (
+              <li key={a.label}>
+                <Link href={a.href} className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm hover:bg-amber-50">
+                  <span>{a.label}</span><Badge tone="warning">{a.count}</Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {noSections && (
+        <Card><EmptyState icon={LayoutDashboard} title="Nothing to show yet"
+          description="Your account has no dashboard sections yet. An Admin can assign the modules you work with." /></Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {(headcount || meals) && (
+          <Panel title="Today's meals" subtitle="Expected and actual people per meal, from the meal records" icon={UtensilsCrossed}
+            href={canAccessPath(role, "/dashboard/meals", permissions) ? "/dashboard/meals" : undefined} linkLabel="Meals">
+            {headcount && headcount.sessions.length > 0 ? (
+              <ul data-today-meals>
+                {headcount.sessions.map((s) => (
+                  <Row key={s.meal_record_id} href={`/dashboard/meals/${s.meal_record_id}`}>
+                    <span className="font-medium text-slate-900">{s.meal_session_name}</span>
+                    <span className="flex items-center gap-3 text-slate-600">
+                      <span>{s.expected ?? "—"} expected · {s.actual ?? "—"} served</span><StatusBadge status={s.status} />
+                    </span>
+                  </Row>
+                ))}
+              </ul>
+            ) : <Empty>No meal recorded for today yet.</Empty>}
+            {headcount && headcount.tomorrow.length > 0 && (
+              <p className="mt-2 text-xs text-slate-500">
+                Tomorrow: {headcount.tomorrow.map((t) => `${t.meal_session_name} ${t.expected ?? "—"}`).join(" · ")} expected
+              </p>
+            )}
+            {headcount && headcount.trend.length > 1 && (
+              <div className="mt-4">
+                <AreaChart points={headcount.trend.map((t) => ({ date: t.date, value: t.count ?? 0 }))} color={SERIES.blue}
+                  seriesLabel="Headcount (largest meal)" formatValue={(v) => v.toLocaleString("en-IN")} />
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {stock && (
+          <Panel title="Stock alerts" subtitle="Items furthest below their minimum stock" icon={Warehouse}
+            href="/dashboard/stock" linkLabel="Stock balances">
+            {stock.lowest.length === 0 ? <Empty>Every item is at or above its minimum stock.</Empty> : (
+              <ul data-stock-alerts>
+                {stock.lowest.map((s) => (
+                  <Row key={s.item_id} href={`/dashboard/stock/${s.item_id}`}>
+                    <span className="font-medium text-slate-900">{s.item_name}</span>
+                    <span className="text-right text-slate-600">
+                      {plainQuantity(s.balance)} of {plainQuantity(s.minimum)} {s.unit}
+                      <span className="block text-xs text-amber-700">needs {plainQuantity(s.needed)} {s.unit}</span>
+                    </span>
+                  </Row>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        )}
+
+        {spending && (
+          <Panel title="Purchase spending" icon={Wallet} href="/dashboard/analytics" linkLabel="Spending analysis"
+            subtitle={`${formatDay(spending.periods.current.date_from)} – ${formatDay(spending.periods.current.date_to)} against the same days last month`}>
+            <dl className="grid grid-cols-3 gap-3 text-sm">
+              <div><dt className="text-xs text-slate-500">This period</dt><dd className="font-semibold">{formatRupees(spending.current)}</dd></div>
+              <div><dt className="text-xs text-slate-500">Same days last month</dt><dd className="font-semibold">{formatRupees(spending.previous)}</dd></div>
+              <div><dt className="text-xs text-slate-500">Change</dt><dd className="font-semibold">{percentText(spending.change_percent)}</dd></div>
+            </dl>
+            {spending.top_categories.length > 0 ? (
+              <div className="mt-4">
+                <BarList color={SERIES.blue} measureLabel="Spending by category this month" rows={spending.top_categories.map((c) => ({
+                  id: c.category_id, label: c.category_name ?? "—", value: Number(c.value), display: formatRupees(c.value) }))} />
+              </div>
+            ) : <Empty>No supplier bills this month yet.</Empty>}
+          </Panel>
+        )}
+
+        {payments && (
+          <Panel title="Payables" subtitle="What is owed to suppliers today" icon={FileText}
+            href="/dashboard/supplier-balances" linkLabel="Supplier balances">
+            {payments.top_outstanding.length === 0 ? <Empty>Nothing is owed to suppliers.</Empty> : (
+              <ul>
+                {payments.top_outstanding.map((s) => (
+                  <Row key={s.supplier_id}>
+                    <span className="font-medium text-slate-900">{s.supplier_name}</span>
+                    <span className="text-slate-600">{formatRupees(s.outstanding)} · {s.open_bill_count} bills</span>
+                  </Row>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-slate-500">Paid this month: {formatRupees(payments.paid_this_month)}</p>
+          </Panel>
+        )}
+
+        {planning && (
+          <Panel title="Meal planning" subtitle="Plans for the next seven days" icon={CalendarRange} href="/dashboard/meal-plans" linkLabel="Meal plans">
+            {planning.upcoming.length === 0 ? <Empty>No meal plan for the next seven days.</Empty> : (
+              <ul>
+                {planning.upcoming.map((p) => (
+                  <Row key={p.id} href={`/dashboard/meal-plans/${p.id}`}>
+                    <span className="font-medium text-slate-900">{p.meal_session_name} · {formatDay(p.plan_date)}</span>
+                    <span className="flex items-center gap-2 text-slate-600">{p.expected_headcount} people <StatusBadge status={p.status} /></span>
+                  </Row>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-slate-500">{planning.approved_standards} approved portion standards · {planning.draft_standards} drafts</p>
+          </Panel>
+        )}
+
+        {outsourced && (
+          <Panel title="Outsourced food" subtitle="Orders from yesterday to the day after tomorrow" icon={Soup}
+            href="/dashboard/outsourced-food" linkLabel="Outsourced food">
+            {outsourced.orders.length === 0 ? <Empty>No outsourced order around today.</Empty> : (
+              <ul>
+                {outsourced.orders.map((o) => (
+                  <Row key={o.id} href={`/dashboard/outsourced-food/${o.id}`}>
+                    <span className="min-w-0"><span className="font-medium text-slate-900">{o.order_number}</span>
+                      <span className="block text-xs text-slate-500">{o.meal_session_name} · {formatDay(o.meal_date)} · {o.supplier_name}</span></span>
+                    {o.receiving_status && <Badge tone={o.receiving_status === "RECEIVED" ? "success" : "warning"}>{humanize(o.receiving_status)}</Badge>}
+                  </Row>
+                ))}
+              </ul>
+            )}
+            {outsourced.planned_cost_this_month !== undefined && (
+              <p className="mt-2 text-xs text-slate-500">Planned cost of this month&rsquo;s ordered meals: {formatRupees(outsourced.planned_cost_this_month)}</p>
+            )}
+          </Panel>
+        )}
+      </div>
+
+      {shortcuts.length > 0 && (
+        <Card>
+          <CardHeader title="Shortcuts" icon={ArrowRight} />
+          <ul className="grid grid-cols-2 gap-2 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-5" data-shortcuts>
+            {shortcuts.map((s) => (
+              <li key={s.href}>
+                <Link href={s.href} className="flex h-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-700 hover:border-brand-200 hover:bg-brand-50">
+                  <s.icon size={16} className="shrink-0 text-brand-600" aria-hidden /><span className="min-w-0">{s.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {data.activity && (
+          <Panel title="Recent activity" subtitle="Latest recorded actions on this campus" icon={RefreshCw}>
+            {data.activity.length === 0 ? <Empty>No recorded activity yet.</Empty> : (
+              <ul>
+                {data.activity.slice(0, 8).map((a) => (
+                  <Row key={a.id}>
+                    <span className="min-w-0"><span className="font-medium text-slate-900">{a.user_name}</span>
+                      <span className="block text-xs text-slate-500">{humanize(a.action)} {humanize(a.entity_type).toLowerCase()}{a.entity_id ? ` #${a.entity_id}` : ""}</span></span>
+                    <span className="shrink-0 text-xs text-slate-500">{formatDateTime(a.created_at)}</span>
+                  </Row>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        )}
+        {data.team && (
+          <Panel title="Team and access" icon={Users} href="/dashboard/staff" linkLabel="Staff management">
+            <ul>
+              <Row><span>Admins</span><span>{data.team.active_admins}</span></Row>
+              <Row><span>Kitchen managers</span><span>{data.team.active_kitchen_managers}</span></Row>
+              <Row><span>Staff</span><span>{data.team.active_staff}</span></Row>
+              <Row><span>Staff with no access assigned</span><span>{data.team.staff_without_access}</span></Row>
+              <Row><span>Inactive accounts</span><span>{data.team.inactive_users}</span></Row>
+            </ul>
+          </Panel>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">Data generated {formatDateTime(data.generated_at)} · campus-scoped</p>
     </div>
   );
 }

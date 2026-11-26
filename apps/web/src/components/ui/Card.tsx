@@ -1,0 +1,93 @@
+import type { ElementType, ReactNode } from "react";
+
+import { cn } from "./cn";
+
+export function Card({
+  children,
+  className,
+  as: Tag = "section",
+  ...data
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: ElementType;
+  /** data-* attributes are passed through (used by tests and analytics). */
+  [key: `data-${string}`]: string | boolean | undefined;
+}) {
+  return (
+    <Tag
+      {...data}
+      className={cn(
+        "min-w-0 rounded-xl border border-slate-200 bg-white shadow-card",
+        className
+      )}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+export function CardHeader({
+  title,
+  subtitle,
+  icon: Icon,
+  iconTone = "neutral",
+  action,
+  className,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  icon?: ElementType;
+  iconTone?: "neutral" | "brand" | "accent";
+  action?: ReactNode;
+  className?: string;
+}) {
+  const tone = {
+    neutral: "bg-slate-100 text-slate-600",
+    brand: "bg-brand-50 text-brand-600",
+    accent: "bg-accent-50 text-accent-500",
+  }[iconTone];
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4",
+        className
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        {Icon && (
+          <div
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              tone
+            )}
+          >
+            <Icon size={16} aria-hidden />
+          </div>
+        )}
+
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-slate-900">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>
+          )}
+        </div>
+      </div>
+
+      {action}
+    </div>
+  );
+}
+
+export function CardBody({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("p-5", className)}>{children}</div>;
+}

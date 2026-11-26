@@ -1,9 +1,75 @@
 @import "tailwindcss";
 
+/*
+ * Kitchen Copilot design tokens.
+ *
+ * brand-500 (#2a78d6) is the accent: chart marks, icons, focus rings.
+ * White text on it measures 4.42:1, just under WCAG AA, so filled buttons
+ * use brand-600 (5.49:1) and blue text uses brand-600 or darker.
+ * accent-500 (#eb6834) is for marks only; as text on white it is 3.2:1.
+ * Meaningful text is slate-500 or darker; slate-400 is 2.56:1 on white.
+ */
+@theme {
+  --color-brand-50: #eef5fd;
+  --color-brand-100: #d9e8fa;
+  --color-brand-200: #b6d2f4;
+  --color-brand-300: #85b3ec;
+  --color-brand-500: #2a78d6;
+  --color-brand-600: #2268c2;
+  --color-brand-700: #1c58a6;
+  --color-brand-800: #194a87;
+
+  --color-accent-50: #fdf1ec;
+  --color-accent-500: #eb6834;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04),
+    0 1px 3px 0 rgb(15 23 42 / 0.03);
+  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08),
+    0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.25);
+
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 :root {
   color-scheme: light;
   --background: #f8fafc;
-  --foreground: #101828;
+  --foreground: #0f172a;
 }
 
 * {
@@ -20,8 +86,12 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -35,7 +105,78 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* One visible focus treatment for every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Inputs draw their own ring, so the outline would double it. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 ::selection {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-brand-100);
+  color: var(--color-brand-800);
+}
+
+/* Native <dialog> backdrop for Modal. */
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+}
+
+dialog[open] {
+  animation: var(--animate-pop-in);
+}
+
+dialog[open]::backdrop {
+  animation: var(--animate-fade-in);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after,
+  dialog::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printing: shadows print as grey bands, and a table row should not be
+   split across pages. */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
 }

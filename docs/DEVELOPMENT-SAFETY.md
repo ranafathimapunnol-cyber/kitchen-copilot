@@ -133,9 +133,12 @@ npm run lint
 
 Review the backend API changes first.
 
-The running `api` container (port 8000) serves the code its image was built
-from. Use it as the source only when the backend has not changed since that
-build:
+Port 8000 is the developer's own API (`uvicorn --reload` from the working
+tree since 18 November 2026; the Docker `api` container stays stopped), so
+it serves the working-tree code. Use it as the source when it is running
+and has reloaded after the last backend change (if the Docker `api`
+container is ever used instead, it serves the code its image was built
+from):
 
 ```bash
 cd apps/web
@@ -233,3 +236,162 @@ tar -czf "$B/files.tar.gz" -T "$B/files.txt"
 
 Do not use `git reset --hard`, `git checkout -- .`, `git clean` or
 `git stash` on uncommitted work that has not been backed up.
+
+## 6. Schema changes while the port 8000 API is running
+
+The developer's API on port 8000 runs from the working tree with
+`--reload`: saving any `.py` file under `services/api` restarts it on the
+new code at once. Code that needs a new migration must therefore not be
+saved into the working tree before that migration is applied to the
+development database, and must be saved immediately after it.
+
+Procedure (used from Stage 4 slice 4a onwards):
+
+1. Copy `services/api` (without `.venv` and `.env*`) to a scratch folder and
+   write the backend change and its migration there.
+2. Run the tests and the migration round trip against that copy (mounted
+   read-only into the test container and the throwaway server).
+3. Apply the migration (section 4.4 backup first).
+4. Sync the changed files into the working tree with a script that refuses
+   to copy anything except the expected file list, keeps the replaced
+   versions, and reports success explicitly. A script that ends without
+   printing its success line has failed, whatever its exit status shows.
+5. Check that port 8000 serves the new code, then run the smoke test.
+
+### 6.1 Incident log
+
+**23 November 2026, about 10:08–10:09:39 (IST) — model ahead of the
+database.** While starting slice 4a, the four new stock-ledger columns were
+added to `StockMovement` in the working tree (`app/models/purchases.py`)
+before migration `b5e1d7c3a920` existed on the development database. The
+port 8000 API reloaded onto that model, so any request reading stock
+movements (stock log, receipt detail, dashboard, receipt acceptance) would
+have failed with a database error for about a minute and a half.
+Correction: the three edits were reverted at once; the file was confirmed
+back to its previous content (no stock-ledger lines in its diff against
+the last commit) and `/health` answered 200; all further backend work was
+done in a scratch copy (procedure above). Data impact: none. The
+development database recorded no inserted, updated or deleted rows between
+its last restart and the pre-migration snapshot at 11:06, which covers
+this window.
+
+**23 November 2026, 11:06:32–11:07:30 (IST) — code behind the database.**
+Migration `b5e1d7c3a920` was applied at 11:06:21–11:06:32. The script that
+then copies the slice-4a code into the working tree stopped silently: it
+compared the folders with `diff`, which exits with status 1 when files
+differ, and under `set -e -o pipefail` that ended the script before it
+copied anything. For about a minute the port 8000 API ran the previous code
+on the new schema; reads were unaffected, but accepting a goods receipt
+would have failed (the new columns are required). Correction: the
+comparison was changed to `{ diff ... || true; }`, the file-list guard was
+rerun, the 14 expected files were synced at 11:07:30 (previous versions
+kept), the working tree was confirmed identical to the verified code, the
+new routes were confirmed live on port 8000, and the smoke tests passed
+(stock 23 of 23, Stage 3 54 of 54). Data impact: none. The only rows
+written in application tables since the migration are its own (6 receipt
+movements backfilled, 1 revision row); the write counters were identical
+after the smoke tests.
+
+### 6.2 The append-only stock ledger (from migration `c7d2e9f4a816`)
+
+`stock_movements` refuses `UPDATE`, `DELETE` and `TRUNCATE` through two
+database triggers, for every role including the `kitchen` superuser, and
+every application session refuses to change or delete a movement
+(`app/models/ledger_guard.py`). Corrections are REVERSAL movements.
+
+- A test that needs a movement with particular values inserts it with those
+  values; it never edits one (see `test_stock_log_days_are_campus_local`).
+- A future migration that must change existing movement rows needs its own
+  approval, and must disable and re-enable the triggers explicitly inside
+  the migration (`ALTER TABLE stock_movements DISABLE TRIGGER
+  stock_movements_no_update_delete` … `ENABLE TRIGGER …`).
+- Test databases get the same triggers whenever SQLAlchemy creates the
+  table, so tests run against the production rule. Dropping test tables
+  (`drop_all`) is not affected.
+- Migration `0e7d99065bd3` (slice 4c) left both triggers and their function
+  unchanged; its verification compares their definitions before and after
+  the upgrade, the downgrade and the re-upgrade. Later migrations should do
+  the same.
+- Saved stock counts (`stock_counts`, `stock_count_items`, slice 4c) are
+  never changed either, but only the application guard enforces it; there
+  is no database trigger on those tables (one would need its own approval).
+  A test or script never edits a saved count; it records a new one.
+- Migration `ea00e5387c2f` (Stage 5 meals) also left both triggers and their
+  function unchanged (checked after the upgrade, the downgrade and the
+  re-upgrade, and on the development database before and after the apply).
+- Meal dishes and leftovers reference each other once retained food is
+  carried forward. The SQLite test fixture therefore switches foreign-key
+  checks off before dropping its tables, and the database-level lock on a
+  carried source is tested on PostgreSQL, where the migration creates it.
+
+### 6.3 Final portion standards and meal plans (from migration `f3a8c2d61b47`)
+
+Stage 6 (meal planning, migration M4) adds four row triggers, for every role
+including the `kitchen` superuser (safeguard S6-2):
+
+- `portion_standards_final`: a standard is never deleted, and an APPROVED or
+  CANCELLED one never changes. A wrong approved standard is replaced by
+  approving a newer version, not by editing it.
+- `portion_standard_basis_final`: the meal records behind a suggested
+  standard are added only to a draft and never changed or deleted.
+- `meal_plans_final`: a plan is never deleted; a CANCELLED plan never
+  changes; an APPROVED plan may only become CANCELLED (status, cancellation
+  fields and `updated_at` only); approval needs every line's snapshot.
+- `meal_plan_lines_final`: lines change only while their plan is a DRAFT.
+
+Consequences for tests and scripts:
+
+- Code that approves a plan writes the line snapshots and flushes them
+  before changing the plan's status (the lines trigger reads the plan's
+  status).
+- A test or script never edits an approved standard or plan; it creates a
+  new version or a new plan. Test databases get the same triggers whenever
+  SQLAlchemy creates the tables (PostgreSQL and SQLite), so tests run against
+  the production rule. Dropping test tables (`drop_all`) is not affected.
+- A future migration that must change existing planning rows needs its own
+  approval and must disable and re-enable the trigger explicitly. The M4
+  verification did that only on the throwaway server, to remove a draft it
+  had inserted to test the downgrade guard.
+- Migration `f3a8c2d61b47` adds the nullable `items.item_kind` column. A
+  table fingerprint that compares rows as whole-row text (`t::text`) changes
+  when a column is added even if no value changes, so the M4 checks compare
+  every pre-existing table over its pre-M4 columns, and check separately that
+  no item was classified by the migration.
+- Migration `f3a8c2d61b47` left the two stock ledger triggers and their
+  function unchanged (checked on the throwaway server after the upgrade, the
+  downgrade and the re-upgrade, and on the development database before and
+  after the apply).
+- Long test runs on the laptop: the PostgreSQL suite and the browser
+  suites take 15–50 minutes under load. If the Mac idle-sleeps during a run
+  (on 24 November 2026 it slept for 35 minutes on battery), a test's
+  30-minute access token expires between two requests and the test fails
+  with "Not authenticated". Run long suites under `caffeinate -i` (it only
+  prevents idle sleep while the command runs). Do not lengthen token
+  lifetimes or change authentication to work around it.
+
+### 6.4 Outsourced food and received meal-dish lines (from migration `b8e4c2a9d175`)
+
+Stage 8a (migration M6) adds the four outsourced tables and two
+`meal_dishes` columns, and widens three meal-dish checks:
+
+- A "received" meal-dish line has `output_quantity = 0`,
+  `carried_quantity = 0`, `received_quantity > 0` and a
+  `source_delivery_line_id`; a composite foreign key ties it to the delivery
+  line's id, accepted quantity, unit and campus. While it exists the
+  database refuses to change or delete that delivery line. Prepared and
+  carried lines keep their old rules (`received_quantity = 0`, no source
+  delivery line).
+- Outsourced food never enters the stock ledger: `stock_ledger.post` refuses
+  any non-reversal posting for an OUTSOURCED item (the item rows are locked
+  first), and goods-receipt acceptance locks and checks its items. A script
+  or test must never post stock for an OUTSOURCED item, and an item with
+  stock movements cannot be classified OUTSOURCED.
+- The downgrade refuses while any outsourced order or received meal-dish
+  line exists; restore the pre-migration backup instead.
+- M6 writes no module, permission or grant: the existing
+  `outsourced_food.*` codes are used. The apply checks therefore compare
+  every pre-existing table (modules, permissions and grants included) over
+  its pre-M6 columns (`meal_dishes` without the two new columns).
+- Lock order in the outsourced code: delivery, order, meal session, meal
+  record. Creating a meal record locks its meal session row too, so a
+  delivery confirmed at the same moment is never left waiting.

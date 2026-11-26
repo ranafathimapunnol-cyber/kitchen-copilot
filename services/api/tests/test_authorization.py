@@ -31,7 +31,7 @@ def create_test_user(db, campus_id, role):
 
 
 def authenticate_as(client, user):
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.password_hash)
     client.cookies.set(settings.ACCESS_COOKIE_NAME, token)
 
 
@@ -101,10 +101,10 @@ READ_ENDPOINTS = [
     "/api/purchases/",
 ]
 
-# Approved matrix: Kitchen Managers have no access to supplier bills.
-KITCHEN_MANAGER_DENIED_READ_ENDPOINTS = {
-    "/api/purchases/",
-}
+# Kitchen Managers have the same operational read access as ADMIN,
+# including supplier bills, payments and balances (role rules confirmed
+# 17 November 2026).
+KITCHEN_MANAGER_DENIED_READ_ENDPOINTS: set[str] = set()
 
 
 @pytest.mark.parametrize("endpoint", READ_ENDPOINTS)

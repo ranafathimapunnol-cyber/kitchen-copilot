@@ -60,6 +60,7 @@ MODULES = [
     ("Headcount", "headcount"),
     ("Inventory", "inventory"),
     ("Purchase Order", "purchase_order"),
+    ("Supplier Bills", "purchase_bill"),
     ("Consumption", "consumption"),
     ("Outsourced Food", "outsourced_food"),
     ("Menu", "menu"),
@@ -71,6 +72,7 @@ PERMISSIONS = {
     "headcount": ["CREATE", "READ", "UPDATE"],
     "inventory": ["CREATE", "READ", "UPDATE"],
     "purchase_order": ["CREATE", "READ", "UPDATE"],
+    "purchase_bill": ["CREATE", "READ", "UPDATE"],
     "consumption": ["CREATE", "READ", "UPDATE"],
     "outsourced_food": ["CREATE", "READ", "UPDATE"],
     "menu": ["CREATE", "READ", "UPDATE"],
@@ -149,7 +151,7 @@ def setup_data(db):
         "campus": campus,
         "user": user,
         "password": password,
-        "token": create_access_token(user.id),
+        "token": create_access_token(user.id, user.password_hash),
     }
 
 

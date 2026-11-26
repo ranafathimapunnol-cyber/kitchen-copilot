@@ -1,9 +1,10 @@
-import ResourcePage from "@/components/shared/ResourcePage";
+import ItemsResourcePage from "@/components/items/ItemsResourcePage";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 
 const config = {
   title: "Items",
-  description: "Maintain ingredients, their categories, units and minimum stock.",
+  description:
+    "Maintain ingredients, their categories, units and minimum stock. The item kind (raw, prepared or outsourced) is set by an Admin or Kitchen Manager with Classify.",
   endpoint: ENDPOINTS.items,
   fields: [
     { name: "name", label: "Item name", required: true, placeholder: "Raw rice" },
@@ -35,9 +36,15 @@ const config = {
     { key: "category_id", label: "Category", optionField: "category_id" },
     { key: "standard_unit_id", label: "Standard unit", optionField: "standard_unit_id" },
     { key: "minimum_stock", label: "Minimum stock" },
+    {
+      key: "item_kind",
+      label: "Kind",
+      labels: { RAW: "Raw", PREPARED: "Prepared", OUTSOURCED: "Outsourced" },
+      emptyLabel: "Not classified",
+    },
   ],
 };
 
 export default function ItemsPage() {
-  return <ResourcePage config={config} />;
+  return <ItemsResourcePage config={config} />;
 }

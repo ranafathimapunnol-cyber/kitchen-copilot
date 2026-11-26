@@ -1,18 +1,22 @@
 """
-Kitchen Manager restrictions from the approved permission matrix.
+Kitchen Manager authority (role rules confirmed 17 November 2026).
 
-- Suppliers are read-only: create, update, deactivate and delete are
-  rejected with 403.
-- Supplier bills (/api/purchases) are not accessible at all, for reading
-  or writing, and the dashboard shows no bill data.
-- Approved operational work (master data, menus, goods receipts) still
-  works.
+- KITCHEN_MANAGER has the same operational authority as ADMIN, including
+  full supplier management, supplier bills (/api/purchases), supplier
+  payments and supplier balances. Payment tests are in
+  test_operational_authority.py.
+- Permanent deletion stays ADMIN-only: deleting a supplier (or any other
+  master record) is rejected with 403. Deactivation is allowed.
+- User creation and permission management stay ADMIN-only (covered in
+  test_user_creation.py and test_staff_permission_assignment.py).
+- STAFF behaviour is unchanged.
 """
 
 import json
 
 import pytest
 
+from app.api.dependencies import KITCHEN_MANAGER_PERMISSIONS
 from app.models import Supplier
 from app.models.purchases import Purchase
 
@@ -40,7 +44,7 @@ def kitchen_manager(db, setup_data):
 
 
 # ------------------------------------------------------------
-# Suppliers: read-only
+# Suppliers: full management, delete stays ADMIN-only
 # ------------------------------------------------------------
 
 def test_kitchen_manager_can_read_suppliers(
@@ -55,18 +59,16 @@ def test_kitchen_manager_can_read_suppliers(
     assert supplier["id"] in [row["id"] for row in response.json()["items"]]
 
 
-def test_kitchen_manager_cannot_create_supplier(
-    client, db, kitchen_manager
-):
+def test_kitchen_manager_can_create_supplier(client, db, kitchen_manager):
     authenticate_as(client, kitchen_manager)
 
-    response = client.post(SUPPLIERS_URL, json={"name": "Blocked Supplier"})
+    response = client.post(SUPPLIERS_URL, json={"name": "Manager Supplier"})
 
-    assert response.status_code == 403, response.text
-    assert db.query(Supplier).count() == 0
+    assert response.status_code == 201, response.text
+    assert db.query(Supplier).count() == 1
 
 
-def test_kitchen_manager_cannot_update_supplier(
+def test_kitchen_manager_can_update_supplier(
     client, db, setup_data, kitchen_manager
 ):
     supplier = create_supplier_as_admin(client, setup_data)
@@ -77,12 +79,12 @@ def test_kitchen_manager_cannot_update_supplier(
         json={"name": "Renamed By Manager"},
     )
 
-    assert response.status_code == 403, response.text
+    assert response.status_code == 200, response.text
     db.expire_all()
-    assert db.get(Supplier, supplier["id"]).name == "Matrix Supplier"
+    assert db.get(Supplier, supplier["id"]).name == "Renamed By Manager"
 
 
-def test_kitchen_manager_cannot_deactivate_supplier(
+def test_kitchen_manager_can_deactivate_supplier(
     client, db, setup_data, kitchen_manager
 ):
     supplier = create_supplier_as_admin(client, setup_data)
@@ -90,14 +92,15 @@ def test_kitchen_manager_cannot_deactivate_supplier(
 
     response = client.post(f"{SUPPLIERS_URL}/{supplier['id']}/deactivate")
 
-    assert response.status_code == 403, response.text
+    assert response.status_code == 200, response.text
     db.expire_all()
-    assert db.get(Supplier, supplier["id"]).is_active is True
+    assert db.get(Supplier, supplier["id"]).is_active is False
 
 
 def test_kitchen_manager_cannot_delete_supplier(
     client, db, setup_data, kitchen_manager
 ):
+    # Permanent deletion stays ADMIN-only for every master record.
     supplier = create_supplier_as_admin(client, setup_data)
     authenticate_as(client, kitchen_manager)
 
@@ -144,10 +147,10 @@ def test_staff_supplier_access_still_follows_assignments(
 
 
 # ------------------------------------------------------------
-# Supplier bills: no access
+# Supplier bills: same access as ADMIN
 # ------------------------------------------------------------
 
-def test_kitchen_manager_cannot_list_or_read_bills(
+def test_kitchen_manager_can_list_and_read_bills(
     client, setup_data, kitchen_manager
 ):
     authenticate_as(client, setup_data["user"])
@@ -155,14 +158,15 @@ def test_kitchen_manager_cannot_list_or_read_bills(
 
     authenticate_as(client, kitchen_manager)
 
-    assert client.get("/api/purchases/").status_code == 403
-    assert (
-        client.get(f"/api/purchases/{records['purchase_id']}").status_code
-        == 403
-    )
+    listed = client.get("/api/purchases/")
+    assert listed.status_code == 200, listed.text
+    assert records["purchase_id"] in [row["id"] for row in listed.json()]
+
+    detail = client.get(f"/api/purchases/{records['purchase_id']}")
+    assert detail.status_code == 200, detail.text
 
 
-def test_kitchen_manager_cannot_create_bill(
+def test_kitchen_manager_can_create_bill(
     client, db, setup_data, kitchen_manager
 ):
     authenticate_as(client, setup_data["user"])
@@ -175,7 +179,7 @@ def test_kitchen_manager_cannot_create_bill(
         "/api/purchases/",
         json={
             "supplier_id": db.query(Supplier).first().id,
-            "invoice_number": "KM-BLOCKED-001",
+            "invoice_number": "KM-BILL-001",
             "purchase_date": "2026-11-07",
             "items": [
                 {
@@ -188,11 +192,11 @@ def test_kitchen_manager_cannot_create_bill(
         },
     )
 
-    assert response.status_code == 403, response.text
-    assert db.query(Purchase).count() == bills_before
+    assert response.status_code == 201, response.text
+    assert db.query(Purchase).count() == bills_before + 1
 
 
-def test_kitchen_manager_effective_permissions_exclude_bills(
+def test_kitchen_manager_effective_permissions_cover_operations(
     client, kitchen_manager
 ):
     authenticate_as(client, kitchen_manager)
@@ -200,35 +204,35 @@ def test_kitchen_manager_effective_permissions_exclude_bills(
     response = client.get("/api/authorization/me")
 
     assert response.status_code == 200, response.text
-    permissions = response.json()["permissions"]
-    assert not [code for code in permissions if code.startswith("purchase_order.")]
-    # Approved operational permissions are preserved.
+    permissions = set(response.json()["permissions"])
+    assert permissions == KITCHEN_MANAGER_PERMISSIONS
+
     for code in (
         "dashboard.read",
         "inventory.create",
         "inventory.read",
         "inventory.update",
+        "purchase_bill.create",
+        "purchase_bill.read",
+        "purchase_bill.update",
+        "purchase_order.create",
+        "purchase_order.read",
+        "purchase_order.update",
         "menu.create",
         "menu.read",
         "menu.update",
         "audit.read",
+        "headcount.create",
         "waste_tracking.create",
     ):
         assert code in permissions, code
 
 
-def test_kitchen_manager_dashboard_contains_no_bill_data(
+def test_kitchen_manager_dashboard_includes_bill_data(
     client, setup_data, kitchen_manager
 ):
     authenticate_as(client, setup_data["user"])
     create_receipt_purchase(client)  # writes a PURCHASE audit entry
-
-    admin_payload = client.get("/api/dashboard/overview").json()
-    assert "purchases" in admin_payload
-    assert any(
-        entry["entity_type"] == "PURCHASE"
-        for entry in admin_payload["activity"]
-    )
 
     authenticate_as(client, kitchen_manager)
     response = client.get("/api/dashboard/overview")
@@ -236,20 +240,15 @@ def test_kitchen_manager_dashboard_contains_no_bill_data(
     assert response.status_code == 200, response.text
     payload = response.json()
 
-    assert "purchases" not in payload
-    assert "purchases_this_month" not in payload["kpis"]
-    assert "purchase_spending_this_month" not in payload["kpis"]
-
-    # The activity feed is kept, but without bill entries.
-    assert payload["activity"]
-    assert all(
-        entry["entity_type"] != "PURCHASE" for entry in payload["activity"]
+    assert "purchases" in payload
+    assert any(
+        entry["entity_type"] == "PURCHASE" for entry in payload["activity"]
     )
-    assert "RECEIPT-INV-001" not in json.dumps(payload)
+    assert "RECEIPT-INV-001" in json.dumps(payload)
 
 
 # ------------------------------------------------------------
-# Approved operational work still works
+# Other operational work
 # ------------------------------------------------------------
 
 def test_kitchen_manager_keeps_master_data_writes(

@@ -1,13 +1,19 @@
 
 import enum
 
-from sqlalchemy import String, Boolean, ForeignKey, Enum
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 
 class UserRole(str, enum.Enum):
+    # Stage 11 (dormant): the database role type gains SUPER_ADMIN only with
+    # migration M1, which needs its own explicit authorization. Until then no
+    # account can have it; the guards for it are already in place.
+    SUPER_ADMIN = "SUPER_ADMIN"
     ADMIN = "ADMIN"
     KITCHEN_MANAGER = "KITCHEN_MANAGER"
     STAFF = "STAFF"
@@ -15,7 +21,6 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-
     id: Mapped[int] = mapped_column(primary_key=True)
 
     campus_id: Mapped[int] = mapped_column(
@@ -49,4 +54,15 @@ class User(Base):
         Boolean,
         default=True,
         nullable=False,
+    )
+
+    # Stage 10: tokens issued before this moment are refused (sign out
+    # everywhere, deactivation, Admin revocation).
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )

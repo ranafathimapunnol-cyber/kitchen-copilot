@@ -1,9 +1,4 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import ResourcePage from "@/components/shared/ResourcePage";
-import { useAuth } from "@/hooks/useAuth";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 
 const config = {
@@ -24,22 +19,10 @@ const config = {
   ],
 };
 
+// Access is checked by DashboardShell (canAccessPath: inventory.read), and
+// each action button follows the user's permissions in ResourcePage. ADMIN
+// and KITCHEN_MANAGER can manage suppliers; permanent delete stays
+// ADMIN-only. The API enforces all of this independently.
 export default function SuppliersPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  const canAccessSuppliers =
-    user && user.role === "ADMIN";
-
-  useEffect(() => {
-    if (!loading && user && !canAccessSuppliers) {
-      router.replace("/dashboard");
-    }
-  }, [loading, user, canAccessSuppliers, router]);
-
-  if (loading || !canAccessSuppliers) {
-    return null;
-  }
-
   return <ResourcePage config={config} />;
 }

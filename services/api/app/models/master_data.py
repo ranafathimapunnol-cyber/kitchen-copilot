@@ -70,6 +70,13 @@ class Item(CampusScoped, Base):
     __table_args__ = (
         UniqueConstraint("campus_id", "name", name="uq_item_campus_name"),
         CheckConstraint("minimum_stock >= 0", name="ck_item_minimum_stock"),
+        # Stage 6 (decision 6-8): raw, prepared or outsourced (PROPOSAL §5.7);
+        # NULL = not classified yet. Set only by ADMIN or KITCHEN_MANAGER
+        # through PUT /api/items/{id}/kind, never by the generic item forms.
+        CheckConstraint(
+            "item_kind IS NULL OR item_kind IN ('RAW', 'PREPARED', 'OUTSOURCED')",
+            name="ck_item_kind",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -85,6 +92,7 @@ class Item(CampusScoped, Base):
     )
     description: Mapped[str | None] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    item_kind: Mapped[str | None] = mapped_column(String(20))
 
 
 class Supplier(CampusScoped, Base):

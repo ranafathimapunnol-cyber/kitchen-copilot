@@ -25,6 +25,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.models.audit_log import AuditLog
 from app.models.purchases import (
     GoodsReceipt,
     GoodsReceiptItem,
@@ -109,6 +110,70 @@ def setup_administrator():
         db.commit()
 
         print("Campus and administrator created successfully.")
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------
+# ADMINISTRATOR INVITATION BY EMAIL
+# ---------------------------------------------------------
+
+def invite_administrator():
+    """Creates an ADMIN without a password and emails a setup link.
+
+    Nobody types, sees or sends the administrator's password. Needs SMTP
+    and FRONTEND_BASE_URL to be configured. If the email cannot be sent,
+    nothing is saved. Running it again for an administrator who has not
+    finished setup sends a fresh link and disables the earlier ones.
+    """
+    from app.schemas.auth import validate_app_email
+    from app.services.password_management import (
+        AccountProvisioningError,
+        provision_admin,
+    )
+
+    db = SessionLocal()
+
+    try:
+        campus, _ = get_or_create(
+            db,
+            Campus,
+            {"code": "ZAITOON-PAYYANUR"},
+            {
+                "name": "Zaitoon International Girls Campus, Payyanur",
+                "is_active": True,
+            },
+        )
+
+        email = input("Administrator email: ").strip().lower()
+        full_name = input("Administrator full name: ").strip()
+
+        if not email or not full_name:
+            raise ValueError("Email and full name are required.")
+
+        email = validate_app_email(email)
+
+        try:
+            _user, created = provision_admin(db, campus, full_name, email)
+        except AccountProvisioningError as exc:
+            print(f"Not completed: {exc}")
+            sys.exit(1)
+
+        if created:
+            print(
+                f"Administrator created. A password setup email was sent "
+                f"to {email}."
+            )
+        else:
+            print(
+                f"A new password setup email was sent to {email}. "
+                "Earlier setup links no longer work."
+            )
 
     except Exception:
         db.rollback()
@@ -734,11 +799,14 @@ def seed_purchase_and_receipt(
                     campus_id=campus.id,
                     item_id=purchase_line.item_id,
                     movement_type="RECEIPT",
+                    direction=1,
                     quantity=accepted,
                     unit_id=purchase_line.unit_id,
                     receipt_item_id=receipt_item.id,
                     reference_type="GOODS_RECEIPT",
                     reference_id=receipt.id,
+                    source_key=f"RECEIPT_ITEM:{receipt_item.id}",
+                    effective_at=receipt.accepted_at,
                     remarks="Accepted demo receipt quantity",
                     created_by=admin.id,
                 )
@@ -772,6 +840,37 @@ def seed_purchase_and_receipt(
             )
 
             db.add(payment)
+            db.flush()
+
+            # Every payment is audited, including seeded ones, with the
+            # same details the API records.
+            bill_total = money(purchase.grand_total)
+            db.add(
+                AuditLog(
+                    campus_id=campus.id,
+                    user_id=kitchen_manager.id,
+                    action="CREATE",
+                    entity_type="SUPPLIER_PAYMENT",
+                    entity_id=payment.id,
+                    details={
+                        "purchase_id": purchase.id,
+                        "invoice_number": purchase.invoice_number,
+                        "supplier_id": purchase.supplier_id,
+                        "payment_date": payment.payment_date.isoformat(),
+                        "amount": str(payment_amount),
+                        "payment_method": payment.payment_method,
+                        "reference_number": payment.reference_number,
+                        "bill_total": str(bill_total),
+                        "paid_before": "0.00",
+                        "paid_after": str(payment_amount),
+                        "outstanding_after": str(
+                            money(bill_total - payment_amount)
+                        ),
+                        "payment_status_after": "PARTIALLY_PAID",
+                        "source": "seed",
+                    },
+                )
+            )
 
 
 # ---------------------------------------------------------
@@ -1002,9 +1101,20 @@ def main():
         help="Create repeatable synthetic demonstration data",
     )
 
+    parser.add_argument(
+        "--invite-admin",
+        action="store_true",
+        help=(
+            "Create an administrator and email them a password setup link "
+            "(requires SMTP and FRONTEND_BASE_URL)"
+        ),
+    )
+
     args = parser.parse_args()
 
-    if args.demo:
+    if args.invite_admin:
+        invite_administrator()
+    elif args.demo:
         seed_demo()
     else:
         setup_administrator()

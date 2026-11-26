@@ -1,3 +1,4 @@
+from typing import Literal
 
 from typing import Annotated
 
@@ -28,7 +29,8 @@ class UserCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
     email: AppEmail
     password: str = Field(min_length=8)
-    role: UserRole
+    # Campus roles only: SUPER_ADMIN accounts are never created here (Stage 11).
+    role: Literal["ADMIN", "KITCHEN_MANAGER", "STAFF"]
 
 
 class UserResponse(BaseModel):

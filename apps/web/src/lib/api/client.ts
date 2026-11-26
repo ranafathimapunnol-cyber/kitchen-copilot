@@ -1,4 +1,6 @@
 
+import { fileNameFromDisposition } from "@/lib/reportExport";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -52,7 +54,12 @@ async function sendRequest(
 
   headers.set("Accept", "application/json");
 
-  if (options.body !== undefined) {
+  // A FormData body (file upload) is sent as multipart; the browser sets
+  // its Content-Type with the boundary. Anything else is sent as JSON.
+  const isForm =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+
+  if (options.body !== undefined && !isForm) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -69,7 +76,9 @@ async function sendRequest(
     body:
       options.body === undefined
         ? undefined
-        : JSON.stringify(options.body),
+        : isForm
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
     cache: "no-store",
   });
 }
@@ -210,6 +219,44 @@ export async function apiRequest<T>(
   return response.json() as Promise<T>;
 }
 
+/**
+ * POSTs and returns the response as a file (report exports), with the same
+ * CSRF and session-refresh handling as apiRequest.
+ */
+export async function apiDownload(
+  endpoint: string,
+  body?: unknown,
+): Promise<{ blob: Blob; filename: string | null }> {
+  // With a body: a POST (report exports). Without: a GET (attachments).
+  const options: ApiOptions =
+    body === undefined ? { method: "GET" } : { method: "POST", body };
+  let response = await sendRequest(endpoint, options);
+
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+
+    if (refreshed) {
+      response = await sendRequest(endpoint, options);
+    }
+
+    if (!refreshed || response.status === 401) {
+      clearCsrfToken();
+      redirectToLogin();
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: fileNameFromDisposition(
+      response.headers.get("Content-Disposition"),
+    ),
+  };
+}
+
 export const api = {
   get: <T>(endpoint: string) =>
     apiRequest<T>(endpoint),
@@ -218,6 +265,12 @@ export const api = {
     apiRequest<T>(endpoint, {
       method: "POST",
       body,
+    }),
+
+  upload: <T>(endpoint: string, form: FormData) =>
+    apiRequest<T>(endpoint, {
+      method: "POST",
+      body: form,
     }),
 
   put: <T>(endpoint: string, body: unknown) =>

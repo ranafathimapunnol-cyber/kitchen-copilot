@@ -16,7 +16,7 @@ never modified):
 - Update validation matches create validation.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -121,10 +121,14 @@ def add_menu_standard(db, base, item_id, unit_id):
 
 
 def add_stock_movement(db, base, item_id, unit_id):
+    # Stage 4 ledger columns: direction, effective time and a unique source.
     db.add(StockMovement(campus_id=base.campus_id, item_id=item_id,
-                         movement_type="RECEIPT", quantity=Decimal("1"),
-                         unit_id=unit_id, reference_type="TEST",
-                         reference_id=1, created_by=base.admin_id))
+                         movement_type="RECEIPT", direction=1,
+                         quantity=Decimal("1"), unit_id=unit_id,
+                         reference_type="TEST", reference_id=1,
+                         source_key=f"TEST:{item_id}:{unit_id}",
+                         effective_at=datetime.now(timezone.utc),
+                         created_by=base.admin_id))
 
 
 def add_waste_line(db, base, item_id, unit_id):

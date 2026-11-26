@@ -4,6 +4,10 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 const config = {
   title: "Menu Main Items",
   description: "Assign items and quantities to each menu.",
+  // Stage 6, decision 6-2: these rows are kept unchanged and are not used by
+  // meal planning; planning uses approved, versioned portion standards.
+  notice:
+    "Not used by planning. Meal plans use approved portion standards (Menu Planning → Portion Standards). Copy these quantities there as drafts; each draft needs approval.",
   endpoint: ENDPOINTS.menuMainItems,
   fields: [
     {
@@ -19,6 +23,7 @@ const config = {
       type: "select" as const,
       required: true,
       optionsEndpoint: ENDPOINTS.items,
+      searchable: true,
     },
     {
       name: "quantity_per_person",

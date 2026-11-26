@@ -1,19 +1,54 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SubmitEvent } from "react";
 import {
-  Plus,
-  RefreshCw,
-  Pencil,
-  Trash2,
-  X,
-  Recycle,
+  CalendarDays,
   ClipboardList,
+  FilterX,
+  IndianRupee,
+  Layers,
+  Pencil,
+  Plus,
+  Recycle,
+  RefreshCw,
+  SearchX,
+  Trash2,
 } from "lucide-react";
 
 import { api } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
+import { fetchAllRecords, normalizeList } from "@/lib/api/list";
 import { useAuthorization } from "@/components/layout/AuthorizationContext";
+import { SERIES } from "@/components/charts/tokens";
+import Alert from "@/components/ui/Alert";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import {
+  Field,
+  SelectInput,
+  TextArea,
+  TextInput,
+  controlClass,
+} from "@/components/ui/Field";
+import SearchSelect from "@/components/ui/SearchSelect";
+import IconButton from "@/components/ui/IconButton";
+import Modal from "@/components/ui/Modal";
+import PageHeader from "@/components/ui/PageHeader";
+import Pagination from "@/components/ui/Pagination";
+import SearchInput from "@/components/ui/SearchInput";
+import SegmentedControl from "@/components/ui/SegmentedControl";
+import StatCard from "@/components/ui/StatCard";
+import {
+  EmptyState,
+  ErrorState,
+  Skeleton,
+} from "@/components/ui/States";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
+import { useToast } from "@/components/ui/Toast";
+import { cn } from "@/components/ui/cn";
 
 type MasterOption = {
   id: number;
@@ -85,11 +120,7 @@ const reasons = [
   { value: "OTHER", label: "Other" },
 ];
 
-const inputClass =
-  "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
-
-const labelClass =
-  "block text-sm font-medium text-slate-700";
+const RECORDS_PER_PAGE = 8;
 
 function todayLocal() {
   const now = new Date();
@@ -122,22 +153,6 @@ function emptyForm(): WasteForm {
   };
 }
 
-function normalizeList<T>(value: unknown): T[] {
-  if (Array.isArray(value)) {
-    return value as T[];
-  }
-
-  if (value && typeof value === "object") {
-    const data = value as Record<string, unknown>;
-
-    if (Array.isArray(data.items)) return data.items as T[];
-    if (Array.isArray(data.results)) return data.results as T[];
-    if (Array.isArray(data.data)) return data.data as T[];
-  }
-
-  return [];
-}
-
 function formatDate(value: string) {
   if (!value) return "—";
 
@@ -163,8 +178,16 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function recordCost(record: WasteRecord) {
+  return record.items.reduce(
+    (total, line) => total + Number(line.estimated_cost || 0),
+    0
+  );
+}
+
 export default function WasteTrackingPage() {
   const { role, permissions } = useAuthorization();
+  const toast = useToast();
 
   const canCreate = permissions.includes("waste_tracking.create");
   const canUpdate = permissions.includes("waste_tracking.update");
@@ -177,16 +200,22 @@ export default function WasteTrackingPage() {
   const [mealSessions, setMealSessions] = useState<MasterOption[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [formError, setFormError] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<WasteForm>(emptyForm());
 
+  const [deleteTarget, setDeleteTarget] = useState<WasteRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const [filterDate, setFilterDate] = useState("");
   const [filterSession, setFilterSession] = useState("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const sessionNames = useMemo(
     () => new Map(mealSessions.map((session) => [session.id, session.name])),
@@ -196,26 +225,29 @@ export default function WasteTrackingPage() {
   // Fetches all page data and stores it. State is updated only in the
   // promise callbacks, so this is safe to call from an effect.
   const fetchData = useCallback(() => {
+    // The master lists are paginated (10 rows by default), so they are
+    // loaded in full; the waste records endpoint returns everything.
     return Promise.all([
       api.get<unknown>(ENDPOINTS.wasteRecords),
-      api.get<unknown>(ENDPOINTS.items),
-      api.get<unknown>(ENDPOINTS.units),
-      api.get<unknown>(ENDPOINTS.menus),
-      api.get<unknown>(ENDPOINTS.mealSessions),
+      fetchAllRecords<MasterOption>(ENDPOINTS.items),
+      fetchAllRecords<MasterOption>(ENDPOINTS.units),
+      fetchAllRecords<MasterOption>(ENDPOINTS.menus),
+      fetchAllRecords<MasterOption>(ENDPOINTS.mealSessions),
     ])
       .then(
         ([
           recordResponse,
-          itemResponse,
-          unitResponse,
-          menuResponse,
-          sessionResponse,
+          itemList,
+          unitList,
+          menuList,
+          sessionList,
         ]) => {
           setRecords(normalizeList<WasteRecord>(recordResponse));
-          setItems(normalizeList<MasterOption>(itemResponse));
-          setUnits(normalizeList<MasterOption>(unitResponse));
-          setMenus(normalizeList<MasterOption>(menuResponse));
-          setMealSessions(normalizeList<MasterOption>(sessionResponse));
+          setItems(itemList.rows);
+          setUnits(unitList.rows);
+          setMenus(menuList.rows);
+          setMealSessions(sessionList.rows);
+          setError("");
         }
       )
       .catch((err: unknown) => {
@@ -227,19 +259,30 @@ export default function WasteTrackingPage() {
       })
       .finally(() => {
         setLoading(false);
+        setRefreshing(false);
       });
   }, []);
 
   // Used by the Refresh button and after saving or deleting a record.
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setRefreshing(true);
     await fetchData();
   }, [fetchData]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const sessionLabel = useCallback(
+    (record: WasteRecord) =>
+      record.meal_session_id
+        ? sessionNames.get(record.meal_session_id) ||
+          `Session #${record.meal_session_id}`
+        : "No meal session",
+    [sessionNames]
+  );
+
+  const needle = query.trim().toLowerCase();
 
   const visibleRecords = useMemo(() => {
     return records.filter((record) => {
@@ -250,28 +293,60 @@ export default function WasteTrackingPage() {
         !filterSession ||
         String(record.meal_session_id ?? "") === filterSession;
 
-      return matchesDate && matchesSession;
-    });
-  }, [records, filterDate, filterSession]);
+      const matchesQuery =
+        !needle ||
+        [
+          `#${record.id}`,
+          record.notes ?? "",
+          sessionLabel(record),
+          ...record.items.flatMap((line) => [
+            line.food_name,
+            line.menu_name ?? "",
+            titleCase(line.waste_reason),
+            titleCase(line.waste_stage),
+          ]),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
 
-  const totalEstimatedCost = useMemo(() => {
-    return visibleRecords.reduce(
-      (recordTotal, record) =>
-        recordTotal +
-        record.items.reduce(
-          (lineTotal, line) =>
-            lineTotal + Number(line.estimated_cost || 0),
-          0
-        ),
-      0
-    );
-  }, [visibleRecords]);
+      return matchesDate && matchesSession && matchesQuery;
+    });
+  }, [records, filterDate, filterSession, needle, sessionLabel]);
+
+  const totalEstimatedCost = useMemo(
+    () => visibleRecords.reduce((total, record) => total + recordCost(record), 0),
+    [visibleRecords]
+  );
+
+  const totalEntries = visibleRecords.reduce(
+    (total, record) => total + record.items.length,
+    0
+  );
+
+  const filtersActive = Boolean(filterDate || filterSession || needle);
+
+  const pageCount = Math.max(
+    1,
+    Math.ceil(visibleRecords.length / RECORDS_PER_PAGE)
+  );
+  const currentPage = Math.min(page, pageCount);
+  const pageRecords = visibleRecords.slice(
+    (currentPage - 1) * RECORDS_PER_PAGE,
+    currentPage * RECORDS_PER_PAGE
+  );
+
+  function clearFilters() {
+    setFilterDate("");
+    setFilterSession("");
+    setQuery("");
+    setPage(1);
+  }
 
   function openCreateForm() {
     setEditingId(null);
     setForm(emptyForm());
-    setError("");
-    setSuccess("");
+    setFormError("");
     setFormOpen(true);
   }
 
@@ -300,9 +375,12 @@ export default function WasteTrackingPage() {
       })),
     });
 
-    setError("");
-    setSuccess("");
+    setFormError("");
     setFormOpen(true);
+  }
+
+  function closeForm() {
+    if (!saving) setFormOpen(false);
   }
 
   function updateLine(
@@ -337,11 +415,10 @@ export default function WasteTrackingPage() {
     }));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
-    setError("");
-    setSuccess("");
+    setFormError("");
 
     try {
       const payload = {
@@ -374,10 +451,10 @@ export default function WasteTrackingPage() {
           `${ENDPOINTS.wasteRecords}/${editingId}`,
           payload
         );
-        setSuccess("Waste record updated successfully.");
+        toast.success("Waste record updated.");
       } else {
         await api.post(ENDPOINTS.wasteRecords, payload);
-        setSuccess("Waste record created successfully.");
+        toast.success("Waste record saved.");
       }
 
       setFormOpen(false);
@@ -385,7 +462,7 @@ export default function WasteTrackingPage() {
       setForm(emptyForm());
       await loadData();
     } catch (err) {
-      setError(
+      setFormError(
         err instanceof Error
           ? err.message
           : "Unable to save the waste record."
@@ -395,140 +472,157 @@ export default function WasteTrackingPage() {
     }
   }
 
-  async function handleDelete(recordId: number) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this waste record?"
-    );
+  async function handleDelete() {
+    if (!deleteTarget) return;
 
-    if (!confirmed) return;
-
+    setDeleting(true);
     setError("");
-    setSuccess("");
 
     try {
-      await api.delete(`${ENDPOINTS.wasteRecords}/${recordId}`);
-      setSuccess("Waste record deleted successfully.");
+      await api.delete(`${ENDPOINTS.wasteRecords}/${deleteTarget.id}`);
+      toast.success(`Waste record #${deleteTarget.id} deleted.`);
+      setDeleteTarget(null);
       await loadData();
     } catch (err) {
+      setDeleteTarget(null);
       setError(
         err instanceof Error
           ? err.message
           : "Unable to delete the waste record."
       );
+    } finally {
+      setDeleting(false);
     }
   }
 
+  const formTotal = form.items.reduce(
+    (total, line) => total + (Number(line.estimated_cost) || 0),
+    0
+  );
+
   return (
     <div className="space-y-6">
-      <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="flex items-center gap-2 text-blue-700">
-            <Recycle size={20} />
-            <p className="text-xs font-bold uppercase tracking-widest">
-              Kitchen Operations
-            </p>
-          </div>
-
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Waste Tracking
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Record and monitor raw ingredient waste and prepared food waste.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
-
-          {canCreate && (
-            <button
-              type="button"
-              onClick={openCreateForm}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800"
+      <PageHeader
+        eyebrow="Operations"
+        icon={Recycle}
+        title="Waste Tracking"
+        description="Record and monitor raw ingredient waste and prepared food waste. Leftovers already classified as wasted on a meal record must not be entered here again."
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => void loadData()}
+              disabled={loading || refreshing}
+              icon={
+                <RefreshCw
+                  size={15}
+                  aria-hidden
+                  className={refreshing ? "animate-spin" : undefined}
+                />
+              }
             >
-              <Plus size={17} />
-              Record Waste
-            </button>
-          )}
-        </div>
-      </section>
+              Refresh
+            </Button>
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div
-          role="status"
-          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-        >
-          {success}
-        </div>
-      )}
-
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Waste records</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {visibleRecords.length}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Waste entries</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {visibleRecords.reduce(
-              (total, record) => total + record.items.length,
-              0
+            {canCreate && (
+              <Button
+                onClick={openCreateForm}
+                icon={<Plus size={16} aria-hidden />}
+              >
+                Record waste
+              </Button>
             )}
-          </p>
-        </div>
+          </>
+        }
+      />
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Estimated waste cost</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            ₹{formatMoney(totalEstimatedCost)}
-          </p>
-        </div>
+      {error && records.length > 0 && (
+        <Alert tone="error" onDismiss={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Figures follow the filters, so they always describe what's listed. */}
+      <section
+        aria-label="Waste summary"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+      >
+        {loading ? (
+          Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={index}
+              className="rounded-xl border border-slate-200 bg-white p-5 shadow-card"
+            >
+              <Skeleton className="h-3.5 w-28" />
+              <Skeleton className="mt-4 h-7 w-20" />
+            </div>
+          ))
+        ) : (
+          <>
+            <StatCard
+              label="Waste records"
+              value={visibleRecords.length.toLocaleString("en-IN")}
+              description={filtersActive ? "Matching current filters" : "All records"}
+              icon={ClipboardList}
+            />
+            <StatCard
+              label="Waste entries"
+              value={totalEntries.toLocaleString("en-IN")}
+              description="Individual items across records"
+              icon={Layers}
+            />
+            <StatCard
+              label="Estimated waste cost"
+              value={`₹${formatMoney(totalEstimatedCost)}`}
+              description={filtersActive ? "Matching current filters" : "All records"}
+              icon={IndianRupee}
+              accent={SERIES.orange}
+            />
+          </>
+        )}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <ClipboardList size={18} className="text-slate-500" />
-          <h2 className="font-semibold text-slate-900">Waste records</h2>
-        </div>
+      <Card className="overflow-hidden">
+        {/* Filters */}
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 lg:flex-row lg:items-center">
+          <SearchInput
+            value={query}
+            onChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            label="Search waste records"
+            placeholder="Search food, menu, reason, notes…"
+            className="w-full lg:max-w-xs"
+          />
 
-        <div className="mb-5 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelClass}>Filter by date</label>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(event) => setFilterDate(event.target.value)}
-              className={inputClass}
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:flex lg:items-center">
+            <div className="relative">
+              <CalendarDays
+                size={15}
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(event) => {
+                  setFilterDate(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter by date"
+                className={cn(controlClass, "h-9 pl-9 lg:w-44")}
+              />
+            </div>
 
-          <div>
-            <label className={labelClass}>Filter by meal session</label>
-            <select
+            <SelectInput
               value={filterSession}
-              onChange={(event) => setFilterSession(event.target.value)}
-              className={inputClass}
+              onChange={(event) => {
+                setFilterSession(event.target.value);
+                setPage(1);
+              }}
+              aria-label="Filter by meal session"
+              className="h-9 lg:w-48"
             >
               <option value="">All meal sessions</option>
               {mealSessions.map((session) => (
@@ -536,414 +630,476 @@ export default function WasteTrackingPage() {
                   {session.name}
                 </option>
               ))}
-            </select>
+            </SelectInput>
           </div>
+
+          {filtersActive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              icon={<FilterX size={14} aria-hidden />}
+              className="self-start lg:ml-auto lg:self-center"
+            >
+              Clear filters
+            </Button>
+          )}
         </div>
 
         {loading ? (
-          <div className="py-12 text-center text-sm text-slate-500">
-            Loading waste records...
+          <div className="space-y-4 p-5" role="status" aria-label="Loading">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={index} className="rounded-lg border border-slate-200 p-4">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="mt-3 h-3 w-64" />
+                <Skeleton className="mt-5 h-16 w-full" />
+              </div>
+            ))}
           </div>
+        ) : error && records.length === 0 ? (
+          <ErrorState
+            title="Couldn't load waste records"
+            message={error}
+            onRetry={() => void loadData()}
+            retrying={refreshing}
+          />
+        ) : records.length === 0 ? (
+          <EmptyState
+            icon={Recycle}
+            title="No waste recorded yet"
+            description="Record raw ingredient or prepared food waste to start tracking where food is lost."
+            action={
+              canCreate ? (
+                <Button
+                  onClick={openCreateForm}
+                  icon={<Plus size={16} aria-hidden />}
+                >
+                  Record waste
+                </Button>
+              ) : undefined
+            }
+          />
         ) : visibleRecords.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 px-5 py-12 text-center">
-            <Recycle size={30} className="mx-auto text-slate-400" />
-            <h3 className="mt-3 font-semibold text-slate-800">
-              No waste records found
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Create a waste record to start tracking kitchen waste.
-            </p>
-          </div>
+          <EmptyState
+            icon={SearchX}
+            title="No matching waste records"
+            description="Try a different date, meal session or search term."
+            action={
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            }
+          />
         ) : (
-          <div className="space-y-4">
-            {visibleRecords.map((record) => {
-              const recordCost = record.items.reduce(
-                (total, line) =>
-                  total + Number(line.estimated_cost || 0),
-                0
-              );
-
-              return (
-                <article
+          <div
+            className={cn(
+              "transition-opacity",
+              refreshing && "pointer-events-none opacity-60"
+            )}
+            aria-busy={refreshing || undefined}
+          >
+            <ul className="space-y-4 p-4 sm:p-5">
+              {pageRecords.map((record) => (
+                <li
                   key={record.id}
                   className="overflow-hidden rounded-xl border border-slate-200"
                 >
-                  <div className="flex flex-col justify-between gap-3 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-slate-900">
-                          Waste Record #{record.id}
-                        </h3>
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                          {formatDate(record.waste_date)}
-                        </span>
+                  <article aria-labelledby={`waste-${record.id}`}>
+                    <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3
+                            id={`waste-${record.id}`}
+                            className="font-semibold text-slate-900"
+                          >
+                            Record #{record.id}
+                          </h3>
+                          <Badge tone="brand">
+                            {formatDate(record.waste_date)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {sessionLabel(record)} · {record.items.length}{" "}
+                          {record.items.length === 1 ? "entry" : "entries"}
+                        </p>
                       </div>
 
-                      <p className="mt-1 text-xs text-slate-500">
-                        Meal session:{" "}
-                        {record.meal_session_id
-                          ? sessionNames.get(record.meal_session_id) ||
-                            `Session #${record.meal_session_id}`
-                          : "Not specified"}
-                        {" · "}
-                        {record.items.length} entr
-                        {record.items.length === 1 ? "y" : "ies"}
-                      </p>
+                      <div className="flex items-center justify-between gap-2 sm:justify-end">
+                        <p className="text-sm font-semibold text-slate-900 tabular-nums">
+                          ₹{formatMoney(recordCost(record))}
+                        </p>
+
+                        <div className="flex items-center">
+                          {canUpdate && (
+                            <IconButton
+                              size="sm"
+                              tone="brand"
+                              icon={<Pencil size={15} />}
+                              label={`Edit waste record ${record.id}`}
+                              onClick={() => openEditForm(record)}
+                            />
+                          )}
+
+                          {isAdmin && (
+                            <IconButton
+                              size="sm"
+                              tone="danger"
+                              icon={<Trash2 size={15} />}
+                              label={`Delete waste record ${record.id}`}
+                              onClick={() => setDeleteTarget(record)}
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <p className="mr-2 text-sm font-semibold text-slate-800">
-                        ₹{formatMoney(recordCost)}
-                      </p>
-
-                      {canUpdate && (
-                        <button
-                          type="button"
-                          onClick={() => openEditForm(record)}
-                          aria-label={`Edit waste record ${record.id}`}
-                          className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      )}
-
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(record.id)}
-                          aria-label={`Delete waste record ${record.id}`}
-                          className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:border-red-300 hover:text-red-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                    {/* Line table on tablet and up */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <THead>
+                          <tr>
+                            <TH>Food / item</TH>
+                            <TH>Type</TH>
+                            <TH align="right">Quantity</TH>
+                            <TH>Stage</TH>
+                            <TH>Reason</TH>
+                            <TH align="right">Cost</TH>
+                          </tr>
+                        </THead>
+                        <TBody>
+                          {record.items.map((line) => (
+                            <TR key={line.id}>
+                              <TD>
+                                <p className="font-medium text-slate-900">
+                                  {line.food_name}
+                                </p>
+                                {line.menu_name && (
+                                  <p className="mt-0.5 text-xs text-slate-500">
+                                    Menu: {line.menu_name}
+                                  </p>
+                                )}
+                              </TD>
+                              <TD>
+                                <Badge
+                                  tone={
+                                    line.waste_type === "RAW_INGREDIENT"
+                                      ? "neutral"
+                                      : "warning"
+                                  }
+                                >
+                                  {line.waste_type === "RAW_INGREDIENT"
+                                    ? "Raw ingredient"
+                                    : "Prepared food"}
+                                </Badge>
+                              </TD>
+                              <TD align="right">
+                                {line.quantity}{" "}
+                                <span className="text-slate-500">
+                                  {line.unit_symbol || line.unit_name || ""}
+                                </span>
+                              </TD>
+                              <TD>{titleCase(line.waste_stage)}</TD>
+                              <TD>{titleCase(line.waste_reason)}</TD>
+                              <TD
+                                align="right"
+                                className="font-medium text-slate-900"
+                              >
+                                ₹{formatMoney(line.estimated_cost)}
+                              </TD>
+                            </TR>
+                          ))}
+                        </TBody>
+                      </Table>
                     </div>
-                  </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[700px] text-left text-sm">
-                      <thead className="border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold">Food / Item</th>
-                          <th className="px-4 py-3 font-semibold">Type</th>
-                          <th className="px-4 py-3 font-semibold">Quantity</th>
-                          <th className="px-4 py-3 font-semibold">Stage</th>
-                          <th className="px-4 py-3 font-semibold">Reason</th>
-                          <th className="px-4 py-3 text-right font-semibold">Cost</th>
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-slate-100">
-                        {record.items.map((line) => (
-                          <tr key={line.id}>
-                            <td className="px-4 py-3">
-                              <p className="font-medium text-slate-800">
+                    {/* Stacked lines on phones */}
+                    <ul className="divide-y divide-slate-100 md:hidden">
+                      {record.items.map((line) => (
+                        <li key={line.id} className="px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-900">
                                 {line.food_name}
                               </p>
-                              {line.menu_name && (
-                                <p className="mt-0.5 text-xs text-slate-500">
-                                  Menu: {line.menu_name}
-                                </p>
-                              )}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-600">
-                              {line.waste_type === "RAW_INGREDIENT"
-                                ? "Raw ingredient"
-                                : "Prepared food"}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-700">
-                              {line.quantity}{" "}
-                              {line.unit_symbol || line.unit_name || ""}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-600">
-                              {titleCase(line.waste_stage)}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-600">
-                              {titleCase(line.waste_reason)}
-                            </td>
-
-                            <td className="px-4 py-3 text-right font-medium text-slate-800">
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                {line.quantity}{" "}
+                                {line.unit_symbol || line.unit_name || ""} ·{" "}
+                                {titleCase(line.waste_stage)} ·{" "}
+                                {titleCase(line.waste_reason)}
+                              </p>
+                            </div>
+                            <p className="shrink-0 text-sm font-medium text-slate-900 tabular-nums">
                               ₹{formatMoney(line.estimated_cost)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                            </p>
+                          </div>
+                          {line.menu_name && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              Menu: {line.menu_name}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
 
-                  {record.notes && (
-                    <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
-                      <span className="font-medium text-slate-700">Notes: </span>
-                      {record.notes}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+                    {record.notes && (
+                      <p className="border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+                        <span className="font-medium text-slate-700">
+                          Notes:{" "}
+                        </span>
+                        {record.notes}
+                      </p>
+                    )}
+                  </article>
+                </li>
+              ))}
+            </ul>
+
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              total={visibleRecords.length}
+              pageSize={RECORDS_PER_PAGE}
+              onPageChange={setPage}
+            />
           </div>
         )}
-      </section>
+      </Card>
 
-      {formOpen && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/50 p-3 sm:p-6">
-          <div className="mx-auto my-4 w-full max-w-4xl rounded-2xl bg-white shadow-2xl sm:my-8">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  {editingId !== null ? "Edit Waste Record" : "Record Waste"}
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Add raw ingredient or prepared food waste entries.
-                </p>
-              </div>
+      <Modal
+        open={formOpen}
+        onClose={closeForm}
+        dismissible={!saving}
+        size="xl"
+        title={editingId !== null ? `Edit waste record #${editingId}` : "Record waste"}
+        description="Add raw ingredient or prepared food waste entries."
+        footer={
+          <>
+            <p className="mr-auto hidden self-center text-sm text-slate-500 sm:block">
+              Total estimated cost{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">
+                ₹{formatMoney(formTotal)}
+              </span>
+            </p>
+            <Button variant="secondary" onClick={closeForm} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" form="waste-form" loading={saving}>
+              {editingId !== null ? "Save changes" : "Save waste record"}
+            </Button>
+          </>
+        }
+      >
+        <form id="waste-form" onSubmit={handleSubmit} className="space-y-6">
+          {formError && <Alert tone="error">{formError}</Alert>}
 
-              <button
-                type="button"
-                onClick={() => setFormOpen(false)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                aria-label="Close form"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Waste date" required>
+              {({ id }) => (
+                <TextInput
+                  id={id}
+                  type="date"
+                  required
+                  data-autofocus
+                  value={form.waste_date}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      waste_date: event.target.value,
+                    }))
+                  }
+                />
+              )}
+            </Field>
+
+            <Field label="Meal session" hint="Optional">
+              {({ id, describedBy }) => (
+                <SelectInput
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={form.meal_session_id}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      meal_session_id: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">No meal session</option>
+                  {mealSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              )}
+            </Field>
+          </div>
+
+          <fieldset className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <legend className="text-sm font-semibold text-slate-900">
+                Waste entries
+                <span className="ml-2 font-normal text-slate-500">
+                  {form.items.length}
+                </span>
+              </legend>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={addLine}
+                icon={<Plus size={14} aria-hidden />}
               >
-                <X size={20} />
-              </button>
+                Add entry
+              </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Waste date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={form.waste_date}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        waste_date: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  />
+            {form.items.map((line, index) => (
+              <div
+                key={index}
+                className="rounded-xl border border-slate-200 bg-slate-50/50 p-4"
+              >
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                      {index + 1}
+                    </span>
+                    <SegmentedControl
+                      label={`Entry ${index + 1} waste type`}
+                      value={line.waste_type}
+                      onChange={(value) => {
+                        updateLine(index, "waste_type", value);
+                        updateLine(index, "item_id", "");
+                        updateLine(index, "food_name", "");
+                      }}
+                      options={[
+                        { value: "RAW_INGREDIENT", label: "Raw ingredient" },
+                        { value: "PREPARED_FOOD", label: "Prepared food" },
+                      ]}
+                    />
+                  </div>
+
+                  {form.items.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeLine(index)}
+                      icon={<Trash2 size={14} aria-hidden />}
+                      className="text-red-700 hover:bg-red-50 hover:text-red-800"
+                    >
+                      Remove
+                    </Button>
+                  )}
                 </div>
 
-                <div>
-                  <label className={labelClass}>Meal session</label>
-                  <select
-                    value={form.meal_session_id}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        meal_session_id: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Select meal session (optional)</option>
-                    {mealSessions.map((session) => (
-                      <option key={session.id} value={session.id}>
-                        {session.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="font-semibold text-slate-900">
-                    Waste entries
-                  </h3>
-
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-                  >
-                    <Plus size={16} />
-                    Add another item
-                  </button>
-                </div>
-
-                {form.items.map((line, index) => (
-                  <div
-                    key={index}
-                    className="space-y-4 rounded-xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-slate-800">
-                        Entry {index + 1}
-                      </h4>
-
-                      {form.items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(index)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                          Remove
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Waste type *</label>
-                      <select
-                        required
-                        value={line.waste_type}
-                        onChange={(event) => {
-                          const value = event.target.value as WasteLineForm["waste_type"];
-                          updateLine(index, "waste_type", value);
-                          updateLine(index, "item_id", "");
-                          updateLine(index, "food_name", "");
-                        }}
-                        className={inputClass}
-                      >
-                        <option value="RAW_INGREDIENT">Raw ingredient</option>
-                        <option value="PREPARED_FOOD">Prepared food</option>
-                      </select>
-                    </div>
-
-                    {line.waste_type === "RAW_INGREDIENT" ? (
-                      <div>
-                        <label className={labelClass}>Inventory item *</label>
-                        <select
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {line.waste_type === "RAW_INGREDIENT" ? (
+                    <Field
+                      label="Inventory item"
+                      required
+                      className="sm:col-span-2 lg:col-span-3"
+                    >
+                      {({ id }) => (
+                        <SearchSelect
+                          id={id}
                           required
+                          requiredMessage="Select an inventory item."
                           value={line.item_id}
-                          onChange={(event) =>
-                            updateLine(index, "item_id", event.target.value)
-                          }
-                          className={inputClass}
-                        >
-                          <option value="">Select inventory item</option>
-                          {items.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <div>
-                        <label className={labelClass}>Prepared food name *</label>
-                        <input
-                          required
-                          maxLength={150}
-                          value={line.food_name}
-                          onChange={(event) =>
-                            updateLine(index, "food_name", event.target.value)
-                          }
-                          placeholder="Example: Vegetable biryani"
-                          className={inputClass}
+                          noun="items"
+                          placeholder="Select inventory item"
+                          options={items.map((item) => ({ value: String(item.id), label: item.name }))}
+                          onChange={(value) => updateLine(index, "item_id", value)}
                         />
-                      </div>
-                    )}
+                      )}
+                    </Field>
+                  ) : (
+                    <>
+                      <Field
+                        label="Prepared food name"
+                        required
+                        className="lg:col-span-2"
+                      >
+                        {({ id }) => (
+                          <TextInput
+                            id={id}
+                            required
+                            maxLength={150}
+                            value={line.food_name}
+                            onChange={(event) =>
+                              updateLine(index, "food_name", event.target.value)
+                            }
+                            placeholder="e.g. Vegetable biryani"
+                          />
+                        )}
+                      </Field>
 
-                    {line.waste_type === "PREPARED_FOOD" && (
-                      <div>
-                        <label className={labelClass}>Related menu (optional)</label>
-                        <select
-                          value={line.menu_id}
-                          onChange={(event) =>
-                            updateLine(index, "menu_id", event.target.value)
-                          }
-                          className={inputClass}
-                        >
-                          <option value="">No related menu</option>
-                          {menus.map((menu) => (
-                            <option key={menu.id} value={menu.id}>
-                              {menu.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                      <Field label="Related menu" hint="Optional">
+                        {({ id, describedBy }) => (
+                          <SelectInput
+                            id={id}
+                            aria-describedby={describedBy}
+                            value={line.menu_id}
+                            onChange={(event) =>
+                              updateLine(index, "menu_id", event.target.value)
+                            }
+                          >
+                            <option value="">No related menu</option>
+                            {menus.map((menu) => (
+                              <option key={menu.id} value={menu.id}>
+                                {menu.name}
+                              </option>
+                            ))}
+                          </SelectInput>
+                        )}
+                      </Field>
+                    </>
+                  )}
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className={labelClass}>Unit *</label>
-                        <select
-                          required
-                          value={line.unit_id}
-                          onChange={(event) =>
-                            updateLine(index, "unit_id", event.target.value)
-                          }
-                          className={inputClass}
-                        >
-                          <option value="">Select unit</option>
-                          {units.map((unit) => (
-                            <option key={unit.id} value={unit.id}>
-                              {unit.name}
-                              {unit.symbol ? ` (${unit.symbol})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Quantity *</label>
-                        <input
-                          type="number"
-                          required
-                          min="0.001"
-                          step="0.001"
-                          value={line.quantity}
-                          onChange={(event) =>
-                            updateLine(index, "quantity", event.target.value)
-                          }
-                          placeholder="Example: 2.500"
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className={labelClass}>Waste stage *</label>
-                        <select
-                          required
-                          value={line.waste_stage}
-                          onChange={(event) =>
-                            updateLine(index, "waste_stage", event.target.value)
-                          }
-                          className={inputClass}
-                        >
-                          {stages.map((stage) => (
-                            <option key={stage.value} value={stage.value}>
-                              {stage.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Waste reason *</label>
-                        <select
-                          required
-                          value={line.waste_reason}
-                          onChange={(event) =>
-                            updateLine(index, "waste_reason", event.target.value)
-                          }
-                          className={inputClass}
-                        >
-                          {reasons.map((reason) => (
-                            <option key={reason.value} value={reason.value}>
-                              {reason.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Estimated cost (₹) *
-                      </label>
-                      <input
+                  <Field label="Quantity" required>
+                    {({ id }) => (
+                      <TextInput
+                        id={id}
                         type="number"
+                        inputMode="decimal"
+                        required
+                        min="0.001"
+                        step="0.001"
+                        value={line.quantity}
+                        onChange={(event) =>
+                          updateLine(index, "quantity", event.target.value)
+                        }
+                        placeholder="e.g. 2.500"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label="Unit" required>
+                    {({ id }) => (
+                      <SelectInput
+                        id={id}
+                        required
+                        value={line.unit_id}
+                        onChange={(event) =>
+                          updateLine(index, "unit_id", event.target.value)
+                        }
+                      >
+                        <option value="">Select unit</option>
+                        {units.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.name}
+                            {unit.symbol ? ` (${unit.symbol})` : ""}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    )}
+                  </Field>
+
+                  <Field label="Estimated cost (₹)" required>
+                    {({ id }) => (
+                      <TextInput
+                        id={id}
+                        type="number"
+                        inputMode="decimal"
                         required
                         min="0"
                         step="0.01"
@@ -951,64 +1107,104 @@ export default function WasteTrackingPage() {
                         onChange={(event) =>
                           updateLine(index, "estimated_cost", event.target.value)
                         }
-                        className={inputClass}
                       />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    )}
+                  </Field>
 
-              <div>
-                <label className={labelClass}>Notes</label>
-                <textarea
-                  rows={3}
-                  maxLength={2000}
-                  value={form.notes}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Additional details about this waste record..."
-                  className={inputClass}
-                />
-              </div>
+                  <Field label="Waste stage" required>
+                    {({ id }) => (
+                      <SelectInput
+                        id={id}
+                        required
+                        value={line.waste_stage}
+                        onChange={(event) =>
+                          updateLine(index, "waste_stage", event.target.value)
+                        }
+                      >
+                        {stages.map((stage) => (
+                          <option key={stage.value} value={stage.value}>
+                            {stage.label}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    )}
+                  </Field>
 
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-                >
-                  {error}
+                  <Field label="Waste reason" required>
+                    {({ id }) => (
+                      <SelectInput
+                        id={id}
+                        required
+                        value={line.waste_reason}
+                        onChange={(event) =>
+                          updateLine(index, "waste_reason", event.target.value)
+                        }
+                      >
+                        {reasons.map((reason) => (
+                          <option key={reason.value} value={reason.value}>
+                            {reason.label}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    )}
+                  </Field>
                 </div>
-              )}
-
-              <div className="flex flex-col-reverse justify-end gap-3 border-t border-slate-200 pt-4 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingId !== null
-                      ? "Update Record"
-                      : "Save Waste Record"}
-                </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            ))}
+          </fieldset>
+
+          <Field label="Notes" hint="Optional · up to 2,000 characters">
+            {({ id, describedBy }) => (
+              <TextArea
+                id={id}
+                aria-describedby={describedBy}
+                maxLength={2000}
+                value={form.notes}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Additional details about this waste record…"
+              />
+            )}
+          </Field>
+
+          <p className="text-sm text-slate-500 sm:hidden">
+            Total estimated cost{" "}
+            <span className="font-semibold text-slate-900 tabular-nums">
+              ₹{formatMoney(formTotal)}
+            </span>
+          </p>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        tone="danger"
+        title={`Delete waste record #${deleteTarget?.id ?? ""}?`}
+        description={
+          deleteTarget ? (
+            <>
+              This permanently removes the record from{" "}
+              <strong className="font-semibold text-slate-800">
+                {formatDate(deleteTarget.waste_date)}
+              </strong>{" "}
+              with {deleteTarget.items.length}{" "}
+              {deleteTarget.items.length === 1 ? "entry" : "entries"} worth ₹
+              {formatMoney(recordCost(deleteTarget))}. This can&apos;t be
+              undone.
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="Delete record"
+        busy={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

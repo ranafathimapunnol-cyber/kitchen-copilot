@@ -1,0 +1,92 @@
+# Stages 10, 11 and 12 — Implementation Notes
+
+Implemented 26 November 2026. Stages 10 and 12: migration `c4d7e9a1f203`
+(M7, additive), applied to the development database after a verified backup
+(`~/kitchen-copilot-backups/pre-c4d7e9a1f203-20261126-210339`). Stage 11 is a
+separate migration (`d5e8f0b2a314`, M1) that is **prepared but not applied**
+— it needs its own authorization.
+Statuses in `REQUIREMENTS-TRACEABILITY.md`; nothing here is ACCEPTED.
+
+## Stage 10 — security, user accounts, audit viewer
+
+- **Sign-in throttling (interim rule for Q19):** every attempt is recorded in
+  `login_attempts` (no password stored). 5 failures for one email, or 30
+  from one IP address, within 15 minutes → HTTP 429 with `Retry-After`.
+  A refused attempt is not itself counted.
+- **Sessions:** `users.sessions_revoked_at`; any token issued before it is
+  refused (access and refresh). Set by "Sign out everywhere" (own account),
+  by an Admin's "Sign out", by deactivation and by a role change.
+- **User Accounts** (`/dashboard/users`, API `/api/admin/users`): ADMIN only,
+  own campus only. Edit name; change Kitchen Manager ↔ Staff; deactivate and
+  reactivate with a reason; sign out; single-use password reset link (the
+  password is never shown); sign-in history. An Admin never changes their own
+  role or status, no account becomes ADMIN here, and the campus keeps at
+  least one active Admin. STAFF permissions are unchanged and stay on Staff
+  Management.
+- **Audit Log** (`/dashboard/audit`, API `/api/audit`): `audit.read`
+  (ADMIN, KITCHEN_MANAGER), own campus, read-only, filters and paging. Money
+  values in details are shown as "hidden" unless the reader holds
+  `purchase_bill.read`.
+
+## Stage 11 — platform (SUPER_ADMIN) — prepared, not applied
+
+Not in the working tree's API yet: migration `d5e8f0b2a314`, the platform
+routes, `scripts/create_super_admin.py` and their 3 tests are held back until
+M1 is authorized. The web screen `/dashboard/platform` exists but is reachable
+only by a SUPER_ADMIN, and none can exist before M1. Design once applied:
+
+
+- Fourth role `SUPER_ADMIN`: no campus (check `ck_user_campus_by_role`),
+  every campus permission denied in the API, no campus screens. Manages
+  organisations and campuses and invites each campus's Admin by emailed setup
+  link (`/dashboard/platform`, API `/api/platform`). Campus user
+  authorization stays with the campus ADMIN.
+- Platform audit rows have no campus (`audit_logs.campus_id` NULL); campus
+  screens never show them.
+- First SUPER_ADMIN: `scripts/create_super_admin.py` (operator, needs SMTP).
+  **Not run** on any database (and not in the working tree until M1).
+
+## Stage 12 — Kitchen Copilot agent
+
+Flow of one turn (`app/agent/engine.py`):
+
+1. **Understand** (`app/agent/intent.py`): built-in rule reader; optional
+   Gemini reader when enabled and configured (request text and the campus's
+   session/menu/item names only), validated, with fallback to rules.
+2. **Plan**: the steps are shown to the user ("How I worked on this").
+3. **Retrieve** through registered tools only (`app/agent/tools.py`); each
+   re-checks role and permission, is campus-scoped through the user, calls
+   the existing tested application functions, and is recorded as a step.
+4. **Explain** with the application's figures; links to the source screens.
+5. **Propose** consequential actions as `PENDING` proposals:
+   draft meal plan (`meal_plan.create`), draft purchase order per last
+   supplier (`purchase_order.create`), stock adjustment *request*
+   (`stock_count.create`; posting still needs the independent approver).
+6. **Approve** (`app/agent/executor.py`): a person decides; the proposal is
+   locked, must be pending and unexpired, the approver's role and permission
+   are checked again, the action runs through the same application function
+   as the normal screen (its own validation and audit), and the decision and
+   result are audited. A second approval is refused (no duplicate effect).
+
+The LLM never touches the database and never produces figures. With
+`AGENT_ENABLED=false` (default) the API refuses agent requests and the screen
+says Copilot is turned off; all other screens are unaffected.
+
+**Deviation needing approval:** ADR-005 names a separate Flask Actions
+service; this release executes approved actions in the API process with the
+same ADR-010 contract. ADR-009's PostgreSQL JSON option is used for traces.
+
+**Not available yet:** approved procedure documents (none supplied; the agent
+says guidance is unavailable from approved sources); a live Gemini key (not
+configured — the FakeLLM tests cover that path).
+
+## Tests
+
+`services/api/tests/test_stage10_12.py` (16 tests; 3 more Stage 11 tests
+held with M1); `apps/web/tests/access.test.mjs`. Full backend suite with
+Stages 10–12 together: 767 passed. Stage 10+12 code: targeted suites 154
+passed. M7 rehearsal on a throwaway PostgreSQL (14 of 14): empty database
+and a copy of the development data — upgrade, downgrade (refused while agent
+conversations exist), upgrade; every existing row unchanged; STAFF grants,
+permissions and ledger triggers unchanged. M7 + M1 together rehearsed 18 of
+18 (M1's downgrade is refused while SUPER_ADMIN rows exist).

@@ -1,41 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChefHat, Loader2, LogOut, X } from "lucide-react";
+
 import { canAccessPath } from "@/lib/auth/permissions";
-
-import {
-  LayoutDashboard,
-  Tags,
-  Ruler,
-  Package,
-  Truck,
-  Utensils,
-  BookOpen,
-  Scale,
-  ListPlus,
-  Users,
-  LogOut,
-  ChefHat,
-  X,
-  Recycle,
-} from "lucide-react";
-
-const navigation = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Categories", href: "/dashboard/categories", icon: Tags },
-  { label: "Units", href: "/dashboard/units", icon: Ruler },
-  { label: "Unit Conversions", href: "/dashboard/unit-conversions", icon: Scale },
-  { label: "Items", href: "/dashboard/items", icon: Package },
-  { label: "Suppliers", href: "/dashboard/suppliers", icon: Truck },
-  { label: "Meal Sessions", href: "/dashboard/meal-sessions", icon: Utensils },
-  { label: "Menus", href: "/dashboard/menus", icon: BookOpen },
-  { label: "Menu Main Items", href: "/dashboard/menu-main-items", icon: ListPlus },
-  { label: "Waste Tracking", href: "/dashboard/waste-tracking", icon: Recycle },
-  { label: "Staff Management", href: "/dashboard/staff", icon: Users },
-];
+import { NAV_GROUPS, formatRole, isActivePath } from "@/lib/navigation";
+import { cn } from "@/components/ui/cn";
+import type { User } from "@/types";
 
 type SidebarProps = {
+  user: User;
   role: string;
   permissions: string[];
   mobileOpen: boolean;
@@ -43,7 +19,15 @@ type SidebarProps = {
   onLogout: () => Promise<void>;
 };
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 export default function Sidebar({
+  user,
   role,
   permissions,
   mobileOpen,
@@ -51,99 +35,157 @@ export default function Sidebar({
   onLogout,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [signingOut, setSigningOut] = useState(false);
 
-  const visibleNavigation = navigation.filter((item) =>
-    canAccessPath(role, item.href, permissions)
-  );
+  // Visibility is decided only by canAccessPath, exactly as before; the
+  // grouping is presentation. Groups with nothing visible are dropped. An
+  // entry whose page is not allowed may offer an alternate page the user is
+  // allowed to open (a counter who may record but not view stock counts).
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.flatMap((item) => {
+      if (canAccessPath(role, item.href, permissions)) return [item];
+      const alternate = item.alternate;
+      return alternate && canAccessPath(role, alternate.href, permissions)
+        ? [{ ...item, ...alternate }]
+        : [];
+    }),
+  })).filter((group) => group.items.length > 0);
+
+  const displayName = user.full_name || user.email;
+
+  const signOut = async () => {
+    setSigningOut(true);
+    try {
+      await onLogout();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   return (
-    <>
-      {mobileOpen && (
+    <aside
+      id="app-sidebar"
+      aria-label="Main navigation"
+      className={cn(
+        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-slate-200 bg-white transition-[transform,visibility] duration-300 ease-out lg:visible lg:w-64 lg:translate-x-0 print:hidden",
+        mobileOpen
+          ? "visible translate-x-0 shadow-overlay"
+          : "invisible -translate-x-full"
+      )}
+    >
+      <div className="flex h-16 shrink-0 items-center justify-between px-5">
+        <Link
+          href="/dashboard"
+          onClick={onClose}
+          className="flex items-center gap-3 rounded-lg"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
+            <ChefHat size={19} aria-hidden />
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-bold tracking-tight text-slate-900">
+              Kitchen Copilot
+            </p>
+            <p className="text-xs text-slate-500">Mess management</p>
+          </div>
+        </Link>
+
         <button
           type="button"
-          aria-label="Close navigation"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-950/50 md:hidden"
-        />
-      )}
+          aria-label="Close navigation"
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#101828] text-white shadow-xl transition-transform duration-300 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
-      >
-        <div className="flex h-20 items-center justify-between border-b border-white/10 px-5">
-          <Link
-            href="/dashboard"
-            onClick={onClose}
-            className="flex items-center gap-3"
+      <nav className="flex-1 overflow-y-auto px-3 pt-2 pb-4">
+        {visibleGroups.map((group) => (
+          <div key={group.label} className="mt-5 first:mt-2">
+            <p className="mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+              {group.label}
+            </p>
+
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActivePath(pathname, item.href);
+
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onClose}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "group relative flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
+                        active
+                          ? "bg-brand-50 font-semibold text-brand-700"
+                          : "font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      {active && (
+                        <span
+                          aria-hidden
+                          className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-brand-500"
+                        />
+                      )}
+                      <Icon
+                        size={18}
+                        aria-hidden
+                        className={cn(
+                          "shrink-0",
+                          active
+                            ? "text-brand-600"
+                            : "text-slate-400 group-hover:text-slate-600"
+                        )}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div className="shrink-0 border-t border-slate-200 p-3">
+        <div className="flex items-center gap-3 rounded-lg p-2">
+          <div
+            aria-hidden
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-700 ring-1 ring-brand-100"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
-              <ChefHat size={23} />
-            </div>
+            {initials(displayName)}
+          </div>
 
-            <div>
-              <p className="text-base font-bold tracking-wide">
-                Kitchen Copilot
-              </p>
-              <p className="text-xs text-slate-400">
-                Mess Management
-              </p>
-            </div>
-          </Link>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {displayName}
+            </p>
+            <p className="truncate text-xs text-slate-500">
+              {formatRole(user.role)}
+            </p>
+          </div>
 
           <button
             type="button"
-            onClick={onClose}
-            aria-label="Close sidebar"
-            className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white md:hidden"
+            onClick={() => void signOut()}
+            disabled={signingOut}
+            aria-label="Sign out"
+            title="Sign out"
+            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
           >
-            <X size={20} />
+            {signingOut ? (
+              <Loader2 size={17} className="animate-spin" />
+            ) : (
+              <LogOut size={17} />
+            )}
           </button>
         </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-6">
-          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Main Menu
-          </p>
-
-          {visibleNavigation.map((item) => {
-            const Icon = item.icon;
-
-            const active =
-              pathname === item.href ||
-              (item.href !== "/dashboard" &&
-                pathname.startsWith(`${item.href}/`));
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
-                  active
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon size={19} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={onLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-300 transition hover:bg-red-500/10 hover:text-red-400"
-          >
-            <LogOut size={19} />
-            <span>Sign out</span>
-          </button>
-        </div>
-      </aside>
-    </>
+      </div>
+    </aside>
   );
 }

@@ -27,7 +27,10 @@ __all__ = [
 
 from app.models.purchases import (
     Purchase,
+    PurchaseAttachment,
     PurchaseItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
     GoodsReceipt,
     GoodsReceiptItem,
     StockMovement,
@@ -38,7 +41,10 @@ from app.models.purchases import (
 
 __all__ += [
     "Purchase",
+    "PurchaseAttachment",
     "PurchaseItem",
+    "PurchaseOrder",
+    "PurchaseOrderItem",
     "GoodsReceipt",
     "GoodsReceiptItem",
     "StockMovement",
@@ -66,3 +72,68 @@ __all__ += [
     "WasteRecord",
     "WasteItem",
 ]
+
+from app.models.stock import (
+    KitchenIssue,
+    KitchenIssueItem,
+    KitchenReturn,
+    KitchenReturnItem,
+    StockAdjustment,
+    StockCount,
+    StockCountItem,
+    StockOpening,
+)
+
+__all__ += [
+    "StockOpening",
+    "KitchenIssue",
+    "KitchenIssueItem",
+    "KitchenReturn",
+    "KitchenReturnItem",
+    "StockCount",
+    "StockCountItem",
+    "StockAdjustment",
+]
+
+from app.models.meals import MealDish, MealLeftover, MealRecord
+
+__all__ += [
+    "MealRecord",
+    "MealDish",
+    "MealLeftover",
+]
+
+# The stock ledger is append-only (decision 4b-5): registers the database
+# triggers for new schemas and the application guard on every session.
+import app.models.ledger_guard  # noqa: E402,F401
+
+from app.models.planning import MealPlan, MealPlanLine, PortionStandard, PortionStandardBasis
+
+__all__ += [
+    "PortionStandard",
+    "PortionStandardBasis",
+    "MealPlan",
+    "MealPlanLine",
+]
+
+from app.models.outsourced import (  # noqa: E402
+    OutsourcedDelivery,
+    OutsourcedDeliveryLine,
+    OutsourcedOrder,
+    OutsourcedOrderLine,
+)
+
+__all__ += [
+    "OutsourcedOrder",
+    "OutsourcedOrderLine",
+    "OutsourcedDelivery",
+    "OutsourcedDeliveryLine",
+]
+
+from app.models.security import LoginAttempt  # noqa: E402
+
+__all__ += ["LoginAttempt"]
+
+from app.models.agent import AgentConversation, AgentMessage, AgentProposal, AgentStep  # noqa: E402
+
+__all__ += ["AgentConversation", "AgentMessage", "AgentStep", "AgentProposal"]

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
     STAFF_ASSIGNABLE_PERMISSIONS,
+    STAFF_EXCLUDED_PERMISSIONS,
     get_current_user,
     require_roles,
 )
@@ -98,6 +99,11 @@ def get_active_staff_permissions(
             "assignable": (
                 row.permission_code in STAFF_ASSIGNABLE_PERMISSIONS
             ),
+            # False for an assignment kept as history that STAFF can never
+            # use (purchase orders are ADMIN and KITCHEN_MANAGER only).
+            "effective": (
+                row.permission_code not in STAFF_EXCLUDED_PERMISSIONS
+            ),
         }
         for row in rows
     ]
@@ -112,7 +118,11 @@ def get_my_permissions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role == UserRole.SUPER_ADMIN:
+        # Platform accounts hold no campus permission (Stage 11).
+        permissions = []
+
+    elif current_user.role == UserRole.ADMIN:
         permissions = [
             permission.permission_code
             for permission in db.query(Permission)
@@ -132,6 +142,7 @@ def get_my_permissions(
                 current_user.id,
                 db,
             )
+            if item["effective"]
         ]
 
     return {

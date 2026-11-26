@@ -1,10 +1,10 @@
 
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,6 +31,10 @@ from app.models.purchases import (
     PurchaseItem,
     StockMovement,
 )
+from app.models.meals import MealDish
+from app.models.planning import MealPlanLine, PortionStandard
+from app.models.outsourced import OutsourcedDeliveryLine, OutsourcedOrderLine
+from app.models.stock import KitchenIssueItem, KitchenReturnItem, StockCountItem, StockOpening
 from app.models.user import User, UserRole
 from app.models.waste import WasteItem
 
@@ -59,6 +63,19 @@ class ItemInput(MasterInput):
     standard_unit_id: int
     minimum_stock: Decimal = Field(default=Decimal("0"), ge=0)
     description: str | None = Field(default=None, max_length=500)
+    # Stage 6 (decision 6-8): the item kind is never set through the item
+    # forms, so no inventory.* grant can classify an item. Only ADMIN and
+    # KITCHEN_MANAGER set it, through PUT /api/items/{id}/kind.
+    item_kind: Any = Field(default=None, exclude=True)
+
+    @model_validator(mode="after")
+    def kind_not_accepted(self):
+        if "item_kind" in self.model_fields_set:
+            raise ValueError(
+                "The item kind is set with the item classification action "
+                "(Admin or Kitchen Manager only), not with the item form."
+            )
+        return self
 
 
 class SupplierInput(MasterInput):
@@ -299,20 +316,6 @@ def get_unit_conversion_factor(
     )
 
 
-def ensure_supplier_write_allowed(user: User) -> None:
-    """Kitchen Managers have read-only access to suppliers.
-
-    Suppliers share the inventory.* permission codes with other master
-    data, so this rule cannot be expressed by the permission set alone.
-    """
-
-    if user.role == UserRole.KITCHEN_MANAGER:
-        raise HTTPException(
-            status_code=403,
-            detail="Kitchen Managers have read-only access to suppliers.",
-        )
-
-
 # ============================================================
 # CATEGORIES
 # ============================================================
@@ -481,8 +484,6 @@ def add_supplier(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("inventory.create")),
 ):
-    ensure_supplier_write_allowed(user)
-
     return create_record(
         Supplier, data.model_dump(), db, user, "SUPPLIER"
     )
@@ -820,6 +821,69 @@ def find_unit_references(db: Session, unit_id: int) -> list[str]:
             "waste lines",
             db.query(WasteItem.id).filter(WasteItem.unit_id == unit_id),
         ),
+        (
+            "opening stock entries",
+            db.query(StockOpening.id).filter(
+                or_(
+                    StockOpening.unit_id == unit_id,
+                    StockOpening.standard_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "kitchen issue lines",
+            db.query(KitchenIssueItem.id).filter(
+                or_(
+                    KitchenIssueItem.unit_id == unit_id,
+                    KitchenIssueItem.standard_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "unused return lines",
+            db.query(KitchenReturnItem.id).filter(
+                or_(
+                    KitchenReturnItem.unit_id == unit_id,
+                    KitchenReturnItem.standard_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "stock count lines",
+            db.query(StockCountItem.id).filter(
+                or_(
+                    StockCountItem.unit_id == unit_id,
+                    StockCountItem.standard_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "meal dishes",
+            db.query(MealDish.id).filter(MealDish.unit_id == unit_id),
+        ),
+        (
+            "portion standards",
+            db.query(PortionStandard.id).filter(PortionStandard.unit_id == unit_id),
+        ),
+        (
+            "meal plan lines",
+            db.query(MealPlanLine.id).filter(
+                or_(
+                    MealPlanLine.unit_id == unit_id,
+                    MealPlanLine.standard_unit_id == unit_id,
+                    MealPlanLine.base_unit_id == unit_id,
+                    MealPlanLine.override_unit_id == unit_id,
+                )
+            ),
+        ),
+        (
+            "outsourced order lines",
+            db.query(OutsourcedOrderLine.id).filter(OutsourcedOrderLine.unit_id == unit_id),
+        ),
+        (
+            "outsourced delivery lines",
+            db.query(OutsourcedDeliveryLine.id).filter(OutsourcedDeliveryLine.unit_id == unit_id),
+        ),
     ]
 
     return [label for label, query in checks if has_rows(query)]
@@ -847,12 +911,32 @@ def find_item_references(db: Session, item_id: int) -> list[str]:
             ),
         ),
         (
+            "kitchen issue lines",
+            db.query(KitchenIssueItem.id).filter(KitchenIssueItem.item_id == item_id),
+        ),
+        (
+            "stock count lines",
+            db.query(StockCountItem.id).filter(StockCountItem.item_id == item_id),
+        ),
+        (
             "menu standards",
             db.query(MenuMainItem.id).filter(MenuMainItem.item_id == item_id),
         ),
         (
             "waste lines",
             db.query(WasteItem.id).filter(WasteItem.item_id == item_id),
+        ),
+        (
+            "portion standards",
+            db.query(PortionStandard.id).filter(PortionStandard.item_id == item_id),
+        ),
+        (
+            "meal plan lines",
+            db.query(MealPlanLine.id).filter(MealPlanLine.item_id == item_id),
+        ),
+        (
+            "outsourced order lines",
+            db.query(OutsourcedOrderLine.id).filter(OutsourcedOrderLine.item_id == item_id),
         ),
     ]
 
@@ -865,9 +949,10 @@ def unit_pair_is_used(
     unit_a: int,
     unit_b: int,
 ) -> bool:
-    """True when a purchase line or menu standard converts between the
-    two units, in either direction (line unit versus the item's standard
-    unit). This matches how get_unit_conversion_factor finds a factor."""
+    """True when a purchase line, menu standard, portion standard or meal
+    plan line (Stage 6, S6-3) converts between the two units, in either
+    direction (line unit versus the item's standard unit). This matches how
+    get_unit_conversion_factor finds a factor."""
 
     def used_by(model) -> bool:
         return has_rows(
@@ -888,7 +973,26 @@ def unit_pair_is_used(
             )
         )
 
-    return used_by(PurchaseItem) or used_by(MenuMainItem)
+    def used_by_override() -> bool:
+        return has_rows(
+            db.query(MealPlanLine.id)
+            .join(Item, Item.id == MealPlanLine.item_id)
+            .filter(
+                MealPlanLine.campus_id == campus_id,
+                or_(
+                    and_(MealPlanLine.override_unit_id == unit_a, Item.standard_unit_id == unit_b),
+                    and_(MealPlanLine.override_unit_id == unit_b, Item.standard_unit_id == unit_a),
+                ),
+            )
+        )
+
+    return (
+        used_by(PurchaseItem)
+        or used_by(MenuMainItem)
+        or used_by(PortionStandard)
+        or used_by(MealPlanLine)
+        or used_by_override()
+    )
 
 
 def ensure_conversion_unused(
@@ -1035,9 +1139,6 @@ def update_master_record(
             "You do not have permission to update this record.",
         )
 
-    if resource == "suppliers":
-        ensure_supplier_write_allowed(user)
-
     try:
         values = schema.model_validate(payload).model_dump()
 
@@ -1132,9 +1233,6 @@ def deactivate_master_record(
             403,
             "You do not have permission to deactivate this record.",
         )
-
-    if resource == "suppliers":
-        ensure_supplier_write_allowed(user)
 
     record = ensure_campus_record(
         model, record_id, db, user
