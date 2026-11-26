@@ -3,45 +3,36 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChefHat, Loader2, LogOut, X } from "lucide-react";
+import {
+  ChefHat,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+} from "lucide-react";
 
 import { canAccessPath } from "@/lib/auth/permissions";
-import { NAV_GROUPS, formatRole, isActivePath } from "@/lib/navigation";
+import { NAV_GROUPS, isActivePath, type NavGroup } from "@/lib/navigation";
 import { cn } from "@/components/ui/cn";
-import type { User } from "@/types";
 
 type SidebarProps = {
-  user: User;
   role: string;
   permissions: string[];
   mobileOpen: boolean;
+  /** Desktop only: icons-only rail. The mobile drawer is always full. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onClose: () => void;
-  onLogout: () => Promise<void>;
 };
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-export default function Sidebar({
-  user,
-  role,
-  permissions,
-  mobileOpen,
-  onClose,
-  onLogout,
-}: SidebarProps) {
-  const pathname = usePathname();
-  const [signingOut, setSigningOut] = useState(false);
-
-  // Visibility is decided only by canAccessPath, exactly as before; the
-  // grouping is presentation. Groups with nothing visible are dropped. An
-  // entry whose page is not allowed may offer an alternate page the user is
-  // allowed to open (a counter who may record but not view stock counts).
-  const visibleGroups = NAV_GROUPS.map((group) => ({
+/**
+ * Visibility is decided only by canAccessPath, exactly as before; grouping,
+ * collapsing and the rail are presentation. Groups with nothing visible are
+ * dropped. An entry whose page is not allowed may offer an alternate page
+ * the user is allowed to open (a counter who may record but not view counts).
+ */
+export function visibleNavGroups(role: string, permissions: string[]): NavGroup[] {
+  return NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.flatMap((item) => {
       if (canAccessPath(role, item.href, permissions)) return [item];
@@ -51,140 +42,193 @@ export default function Sidebar({
         : [];
     }),
   })).filter((group) => group.items.length > 0);
+}
 
-  const displayName = user.full_name || user.email;
+export default function Sidebar({
+  role,
+  permissions,
+  mobileOpen,
+  collapsed,
+  onToggleCollapsed,
+  onClose,
+}: SidebarProps) {
+  const pathname = usePathname();
+  const groups = visibleNavGroups(role, permissions);
 
-  const signOut = async () => {
-    setSigningOut(true);
-    try {
-      await onLogout();
-    } finally {
-      setSigningOut(false);
-    }
-  };
+  // Groups the person has folded away. The group holding the current page
+  // always shows, so the active entry is never hidden.
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const toggleGroup = (label: string) =>
+    setFolded((previous) => {
+      const next = new Set(previous);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   return (
     <aside
       id="app-sidebar"
       aria-label="Main navigation"
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-slate-200 bg-white transition-[transform,visibility] duration-300 ease-out lg:visible lg:w-64 lg:translate-x-0 print:hidden",
+        "fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col border-r border-slate-200/70 bg-[#faf6ee] transition-[transform,visibility,width] duration-300 ease-out lg:visible lg:translate-x-0 print:hidden",
+        collapsed ? "lg:w-[76px]" : "lg:w-[17rem]",
         mobileOpen
           ? "visible translate-x-0 shadow-overlay"
           : "invisible -translate-x-full"
       )}
     >
-      <div className="flex h-16 shrink-0 items-center justify-between px-5">
+      {/* Logo */}
+      <div
+        className={cn(
+          "flex h-[68px] shrink-0 items-center justify-between gap-2 px-5",
+          collapsed && "lg:justify-center lg:px-0"
+        )}
+      >
         <Link
           href="/dashboard"
           onClick={onClose}
-          className="flex items-center gap-3 rounded-lg"
+          className="flex min-w-0 items-center gap-3 rounded-xl"
+          aria-label="Kitchen Copilot home"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
-            <ChefHat size={19} aria-hidden />
-          </div>
-          <div className="leading-tight">
-            <p className="text-sm font-bold tracking-tight text-slate-900">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-[0_6px_16px_-6px_rgb(111_89_64/0.6)]">
+            <ChefHat size={20} aria-hidden />
+          </span>
+          <span className={cn("min-w-0 leading-tight", collapsed && "lg:hidden")}>
+            <span className="font-display block truncate text-[17px] font-medium text-slate-900">
               Kitchen Copilot
-            </p>
-            <p className="text-xs text-slate-500">Mess management</p>
-          </div>
+            </span>
+            <span className="block text-[11px] tracking-[0.12em] text-slate-500 uppercase">
+              Mess management
+            </span>
+          </span>
         </Link>
 
         <button
           type="button"
           onClick={onClose}
           aria-label="Close navigation"
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+          className="rounded-lg p-2 text-slate-500 hover:bg-brand-50 hover:text-slate-900 lg:hidden"
         >
           <X size={18} />
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pt-2 pb-4">
-        {visibleGroups.map((group) => (
-          <div key={group.label} className="mt-5 first:mt-2">
-            <p className="mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-              {group.label}
-            </p>
+      <div className="mx-5 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActivePath(pathname, item.href);
+      {/* Navigation */}
+      <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-4">
+        {groups.map((group) => {
+          const holdsActive = group.items.some((item) => isActivePath(pathname, item.href));
+          const open = holdsActive || !folded.has(group.label);
+          const listId = `nav-${group.label.replace(/\W+/g, "-").toLowerCase()}`;
 
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onClose}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "group relative flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
-                        active
-                          ? "bg-brand-50 font-semibold text-brand-700"
-                          : "font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      )}
-                    >
-                      {active && (
-                        <span
-                          aria-hidden
-                          className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-brand-500"
-                        />
-                      )}
-                      <Icon
-                        size={18}
-                        aria-hidden
+          return (
+            <div key={group.label} className="mt-4 first:mt-1">
+              <button
+                type="button"
+                onClick={() => !holdsActive && toggleGroup(group.label)}
+                aria-expanded={open}
+                aria-controls={listId}
+                className={cn(
+                  "group/heading flex w-full items-center justify-between rounded-md px-3 py-1 text-[10.5px] font-semibold tracking-[0.14em] text-slate-500 uppercase transition-colors hover:text-slate-700",
+                  collapsed && "lg:hidden",
+                  holdsActive && "cursor-default hover:text-slate-500"
+                )}
+              >
+                {group.label}
+                {!holdsActive && (
+                  <ChevronDown
+                    size={13}
+                    aria-hidden
+                    className={cn(
+                      "opacity-0 transition-[transform,opacity] duration-200 group-hover/heading:opacity-100 group-focus-visible/heading:opacity-100",
+                      !open && "-rotate-90 opacity-100"
+                    )}
+                  />
+                )}
+              </button>
+              {collapsed && (
+                <div aria-hidden className="mx-auto my-2 hidden h-px w-8 bg-slate-200 first:hidden lg:block" />
+              )}
+
+              <ul
+                id={listId}
+                className={cn(
+                  "mt-1 space-y-0.5",
+                  !open && "hidden",
+                  // The rail always lists every entry.
+                  collapsed && "lg:block"
+                )}
+              >
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActivePath(pathname, item.href);
+
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        aria-current={active ? "page" : undefined}
+                        title={collapsed ? item.label : undefined}
                         className={cn(
-                          "shrink-0",
+                          "group relative flex h-9 items-center gap-3 rounded-[10px] px-3 text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+                          collapsed && "lg:mx-auto lg:h-10 lg:w-10 lg:justify-center lg:px-0",
                           active
-                            ? "text-brand-600"
-                            : "text-slate-400 group-hover:text-slate-600"
+                            ? "bg-white font-semibold text-slate-900 shadow-[0_1px_2px_rgb(56_45_37/0.06),0_0_0_1px_rgb(229_218_200/0.9)]"
+                            : "font-medium text-slate-600 hover:bg-sand/45 hover:text-slate-900"
                         )}
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                      >
+                        {active && (
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-brand-600",
+                              collapsed && "lg:hidden"
+                            )}
+                          />
+                        )}
+                        <Icon
+                          size={17}
+                          aria-hidden
+                          strokeWidth={active ? 2.1 : 1.8}
+                          className={cn(
+                            "shrink-0 transition-colors",
+                            active
+                              ? "text-brand-700"
+                              : "text-slate-400 group-hover:text-brand-700"
+                          )}
+                        />
+                        <span className={cn("truncate", collapsed && "lg:sr-only")}>
+                          {item.label}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
-      <div className="shrink-0 border-t border-slate-200 p-3">
-        <div className="flex items-center gap-3 rounded-lg p-2">
-          <div
-            aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-700 ring-1 ring-brand-100"
-          >
-            {initials(displayName)}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900">
-              {displayName}
-            </p>
-            <p className="truncate text-xs text-slate-500">
-              {formatRole(user.role)}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            disabled={signingOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-          >
-            {signingOut ? (
-              <Loader2 size={17} className="animate-spin" />
-            ) : (
-              <LogOut size={17} />
-            )}
-          </button>
-        </div>
+      {/* Collapse control (desktop) */}
+      <div className="hidden shrink-0 border-t border-slate-200/70 p-3 lg:block">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-controls="app-sidebar"
+          aria-expanded={!collapsed}
+          className={cn(
+            "flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-[13px] font-medium text-slate-500 transition-colors hover:bg-sand/45 hover:text-slate-900",
+            collapsed && "justify-center px-0"
+          )}
+        >
+          {collapsed ? <ChevronsRight size={17} aria-hidden /> : <ChevronsLeft size={17} aria-hidden />}
+          {!collapsed && "Collapse"}
+        </button>
       </div>
     </aside>
   );

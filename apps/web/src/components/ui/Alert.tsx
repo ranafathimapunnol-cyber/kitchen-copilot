@@ -44,7 +44,7 @@ export default function Alert({
       // Errors interrupt; everything else is announced politely.
       role={tone === "error" ? "alert" : "status"}
       className={cn(
-        "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm",
+        "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm",
         box,
         className
       )}

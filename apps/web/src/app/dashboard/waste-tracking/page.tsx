@@ -551,7 +551,7 @@ export default function WasteTrackingPage() {
           Array.from({ length: 3 }, (_, index) => (
             <div
               key={index}
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-card"
+              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card"
             >
               <Skeleton className="h-3.5 w-28" />
               <Skeleton className="mt-4 h-7 w-20" />

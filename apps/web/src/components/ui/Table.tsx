@@ -39,7 +39,7 @@ export function Table({
 
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-slate-200 bg-slate-50/80">
+    <thead className="border-b border-slate-200/80 bg-slate-50/70">
       {children}
     </thead>
   );
@@ -56,7 +56,7 @@ export function TH({
       scope="col"
       {...props}
       className={cn(
-        "px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap text-slate-500 uppercase first:pl-5 last:pr-5",
+        "px-4 py-3 text-[11px] font-semibold tracking-[0.08em] whitespace-nowrap text-slate-500 uppercase first:pl-5 last:pr-5 sm:first:pl-6 sm:last:pr-6",
         alignClass[align],
         className
       )}
@@ -83,7 +83,7 @@ export function TR({
   return (
     <tr
       className={cn(
-        "transition-colors hover:bg-slate-50/70",
+        "transition-colors duration-150 hover:bg-brand-50/50",
         muted && "bg-slate-50/40 text-slate-500",
         className
       )}
@@ -103,7 +103,7 @@ export function TD({
     <td
       {...props}
       className={cn(
-        "px-4 py-3 align-middle text-slate-700 first:pl-5 last:pr-5",
+        "px-4 py-3.5 align-middle text-slate-700 first:pl-5 last:pr-5 sm:first:pl-6 sm:last:pr-6",
         alignClass[align],
         align === "right" && "tabular-nums",
         className

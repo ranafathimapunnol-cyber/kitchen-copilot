@@ -12,32 +12,36 @@
  */
 
 export const SERIES = {
-  /** Categorical slot 1 — headcount. */
-  blue: "#2a78d6",
-  /** Categorical slot 2 — waste cost. */
-  orange: "#eb6834",
+  /** Categorical slot 1 — coffee (the brand's primary). 4.57:1 on cream. */
+  coffee: "#8b6f50",
+  /** Categorical slot 2 — dusk blue, opposite coffee on the blue–yellow
+   *  axis so the pair stays apart for colour-blind readers. 5.1:1 on cream. */
+  dusk: "#4f7088",
+  /** Older slot names, kept so existing charts follow the theme. */
+  blue: "#8b6f50",
+  orange: "#4f7088",
 } as const;
 
 export type SeriesHue = (typeof SERIES)[keyof typeof SERIES];
 
 export const CHROME = {
   /** The card surface these charts render on. */
-  surface: "#ffffff",
+  surface: "#fffcf6",
   /** Hairline gridline, one step off surface. */
-  grid: "#e1e0d9",
+  grid: "#ebe2d3",
   /** Baseline / axis rule. */
-  axis: "#c3c2b7",
+  axis: "#d5c7b1",
 } as const;
 
 export const INK = {
-  primary: "#0b0b0b",
-  secondary: "#52514e",
+  primary: "#382d25",
+  secondary: "#5f5246",
   /** Axis ticks and labels. */
-  muted: "#898781",
+  muted: "#8a7d6f",
   /** Positive delta, when up is good. */
-  positive: "#006300",
+  positive: "#33694a",
   /** Negative delta, when up is good. */
-  negative: "#d03b3b",
+  negative: "#a8432f",
 } as const;
 
 /** Area wash opacity — a wash, never a saturated block. */

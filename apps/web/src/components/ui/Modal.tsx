@@ -83,7 +83,7 @@ export default function Modal({
         if (dismissible) onClose();
       }}
       className={cn(
-        "m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-2xl border-0 bg-white p-0 text-slate-900 shadow-overlay",
+        "m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-0 text-slate-900 shadow-overlay",
         widths[size]
       )}
     >
@@ -91,7 +91,7 @@ export default function Modal({
         <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
             <div className="min-w-0">
-              <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+              <h2 id={titleId} className="font-display text-xl font-medium text-slate-900">
                 {title}
               </h2>
               {description && (
@@ -117,7 +117,7 @@ export default function Modal({
           </div>
 
           {footer && (
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:justify-end">
               {footer}
             </div>
           )}

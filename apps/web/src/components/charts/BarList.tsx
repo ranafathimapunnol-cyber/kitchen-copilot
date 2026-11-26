@@ -56,7 +56,7 @@ export default function BarList({ rows, color, measureLabel }: Props) {
             {/* The row is the hit target, so it extends past the painted bar. */}
             <div
               className="rounded-lg px-2 py-2.5 transition-colors"
-              style={{ background: isActive ? "#f8fafc" : "transparent" }}
+              style={{ background: isActive ? "#f5f0e6" : "transparent" }}
               onPointerEnter={() => setActiveId(row.id)}
               onPointerLeave={() => setActiveId(null)}
               onFocus={() => setActiveId(row.id)}

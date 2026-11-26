@@ -85,3 +85,29 @@ export function percentText(value: string | null | undefined): string {
   const number = Number(value);
   return `${number > 0 ? "+" : ""}${value}%`;
 }
+
+/** True when the overview endpoint will answer for this user (403 otherwise). */
+export function canReadDashboard(role: string, permissions: string[]): boolean {
+  return role === "ADMIN" || role === "KITCHEN_MANAGER" || permissions.includes("dashboard.read");
+}
+
+export type AttentionItem = { label: string; href: string; count: number };
+
+/**
+ * Work waiting for someone, from the overview counts. Shown on the
+ * dashboard and as the top bar's notifications; callers filter by
+ * canAccessPath so nobody is sent to a page they cannot open.
+ */
+export function attentionItems(data: DashboardOverview): AttentionItem[] {
+  const { meals, counts, kitchen, outsourced, planning, stock } = data;
+  return [
+    { label: "Items below minimum stock", href: "/dashboard/stock", count: stock?.below_minimum ?? 0 },
+    { label: "Meal records from earlier days still open", href: "/dashboard/meals", count: meals?.awaiting_close_count ?? 0 },
+    { label: "Stock adjustments waiting for approval", href: "/dashboard/stock-adjustments", count: counts?.pending_adjustments ?? 0 },
+    { label: "Draft kitchen issues to confirm", href: "/dashboard/kitchen-issues", count: kitchen?.draft_issues ?? 0 },
+    { label: "Draft outsourced deliveries to confirm", href: "/dashboard/outsourced-food", count: outsourced?.draft_deliveries ?? 0 },
+    { label: "Outsourced food waiting for its meal record", href: "/dashboard/outsourced-food", count: outsourced?.waiting_for_meal_record ?? 0 },
+    { label: "Draft meal plans", href: "/dashboard/meal-plans", count: planning?.draft_plans ?? 0 },
+    { label: "Draft portion standards to approve", href: "/dashboard/portion-standards", count: planning?.draft_standards ?? 0 },
+  ].filter((item) => item.count > 0);
+}

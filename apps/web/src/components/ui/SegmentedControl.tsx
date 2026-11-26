@@ -21,7 +21,7 @@ export default function SegmentedControl<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className="inline-flex shrink-0 rounded-lg border border-slate-200 bg-slate-100/70 p-0.5"
+      className="inline-flex max-w-full shrink-0 overflow-x-auto rounded-[10px] border border-slate-200/80 bg-slate-100/80 p-0.5"
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -33,7 +33,7 @@ export default function SegmentedControl<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-[background-color,color,box-shadow] duration-200",
               active
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"

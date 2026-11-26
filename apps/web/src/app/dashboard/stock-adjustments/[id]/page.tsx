@@ -33,7 +33,7 @@ import { useToast } from "@/components/ui/Toast";
 
 function Figure({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-card">
+    <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className={`mt-1 text-xl font-bold tracking-tight ${tone ?? "text-slate-900"}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}

@@ -14,7 +14,7 @@ import { cn } from "./cn";
  * uses these, so heights, borders and focus rings match everywhere.
  */
 export const controlClass =
-  "block w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-xs transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-3 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 aria-invalid:border-red-500 aria-invalid:focus:ring-red-500/15";
+  "block w-full rounded-[10px] border border-slate-300/90 bg-white px-3 text-sm text-slate-900 shadow-xs transition-[border-color,box-shadow] duration-150 placeholder:text-slate-400 hover:border-brand-300 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 aria-invalid:border-red-500 aria-invalid:focus:ring-red-500/15";
 
 type FieldProps = {
   label: string;
@@ -47,7 +47,7 @@ export function Field({
 
   return (
     <div className={cn("min-w-0 space-y-1.5", className)}>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="block text-[13px] font-medium text-slate-700">
         {label}
         {required && (
           <span className="ml-0.5 text-red-600" aria-hidden>

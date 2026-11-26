@@ -26,17 +26,17 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800",
+    "bg-brand-600 text-white shadow-[0_1px_2px_rgb(56_45_37/0.12),inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-brand-700 active:bg-brand-800",
   secondary:
-    "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 active:bg-slate-100",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    "border border-slate-200 bg-white text-slate-800 shadow-xs hover:border-brand-200 hover:bg-brand-50/60 active:bg-brand-50",
+  ghost: "text-slate-600 hover:bg-brand-50 hover:text-slate-900",
   danger: "bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800",
   warning:
     "bg-amber-600 text-white shadow-sm hover:bg-amber-700 active:bg-amber-800",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-8 gap-1.5 px-3 text-xs",
+  sm: "h-8 gap-1.5 px-3 text-[13px]",
   md: "h-10 gap-2 px-4 text-sm",
   lg: "h-11 gap-2 px-5 text-sm",
 };
@@ -60,7 +60,7 @@ export default function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[10px] font-medium tracking-[0.005em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out active:scale-[0.985] disabled:pointer-events-none disabled:opacity-50",
         variants[variant],
         sizes[size],
         block && "w-full",

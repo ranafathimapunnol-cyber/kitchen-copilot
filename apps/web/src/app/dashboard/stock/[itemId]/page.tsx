@@ -59,7 +59,7 @@ function Source({ movement }: { movement: LedgerMovement }) {
 
 function Fact({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-card">
+    <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-card">
       <p className="text-sm font-medium text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}

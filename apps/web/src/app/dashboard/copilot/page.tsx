@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CheckCircle2, ExternalLink, ListTree, MessageSquarePlus, Send, ShieldAlert, XCircle } from "lucide-react";
+import { ArrowUp, Bot, CheckCircle2, ClipboardSignature, ExternalLink, ListTree, MessageSquarePlus, PieChart, ShieldAlert, ShieldCheck, ShoppingBasket, Sparkles, XCircle, type LucideIcon } from "lucide-react";
 
 import { api } from "@/lib/api/client";
 import { AGENT_ENDPOINT } from "@/lib/api/endpoints";
@@ -16,7 +16,6 @@ import Button from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, TextArea } from "@/components/ui/Field";
 import Modal from "@/components/ui/Modal";
-import PageHeader from "@/components/ui/PageHeader";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import { EmptyState, ErrorState, Spinner, TableSkeleton } from "@/components/ui/States";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/Table";
@@ -27,18 +26,23 @@ type Thread = { id: number; title: string; messages: AgentMessage[]; proposals: 
 
 function ProposalCard({ p, onDecide }: { p: AgentProposal; onDecide: (p: AgentProposal, approve: boolean) => void }) {
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4" data-proposal={p.status}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-wide text-amber-800 uppercase">{ACTION_LABELS[p.action_type] ?? p.action_type} · needs a person&rsquo;s approval</p>
-          <p className="mt-1 font-semibold text-slate-900">{p.title}</p>
+    <div className="relative overflow-hidden rounded-2xl border border-brand-200/80 bg-white shadow-card" data-proposal={p.status}>
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${p.status === "PENDING" ? "bg-amber-500" : p.status === "EXECUTED" ? "bg-emerald-600" : p.status === "REJECTED" ? "bg-slate-400" : "bg-red-600"}`} />
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-dashed border-brand-200 bg-brand-50/50 py-3 pr-4 pl-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 ring-1 ring-brand-200"><ClipboardSignature size={16} aria-hidden /></span>
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-semibold tracking-[0.12em] text-brand-700 uppercase">{ACTION_LABELS[p.action_type] ?? p.action_type} · needs a person&rsquo;s approval</p>
+            <p className="mt-0.5 font-semibold text-slate-900">{p.title}</p>
+          </div>
         </div>
         <StatusBadge status={p.status} />
       </div>
-      <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-slate-700">
+      <div className="py-3.5 pr-4 pl-5">
+      <ul className="list-disc space-y-0.5 pl-5 text-sm text-slate-700 marker:text-brand-400">
         {proposalLines(p).map((l, i) => <li key={i}>{l}</li>)}
       </ul>
-      <p className="mt-2 text-sm text-slate-600">{p.rationale}</p>
+      <p className="mt-2.5 text-sm leading-relaxed text-slate-600">{p.rationale}</p>
       {p.status === "PENDING" && (
         p.can_decide ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -55,6 +59,7 @@ function ProposalCard({ p, onDecide }: { p: AgentProposal; onDecide: (p: AgentPr
       )}
       {p.status === "FAILED" && <p className="mt-3 text-sm text-red-700">Not created: {p.error}</p>}
       {p.status === "REJECTED" && <p className="mt-3 text-sm text-slate-600">Rejected by {p.decided_by_name}: {p.decision_note}</p>}
+      </div>
     </div>
   );
 }
@@ -67,7 +72,7 @@ function Answer({ m, proposals, onChoice, onDecide, busy }: {
   const mine = proposals.filter((x) => p.proposal_ids?.includes(x.id));
   return (
     <div className="flex gap-3" data-answer={p.status}>
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white"><Bot size={16} aria-hidden /></div>
+      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-[0_6px_14px_-6px_rgb(111_89_64/0.7)]"><Sparkles size={16} aria-hidden /></div>
       <div className="min-w-0 flex-1 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
           {p.workflow && <Badge tone="brand">{WORKFLOW_LABELS[p.workflow] ?? p.workflow}</Badge>}
@@ -76,18 +81,18 @@ function Answer({ m, proposals, onChoice, onDecide, busy }: {
           <span>{formatDateTime(m.created_at)}</span>
         </div>
         {p.plan && p.plan.length > 0 && p.status !== "needs_info" && (
-          <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-            <summary className="cursor-pointer font-medium text-slate-700">How I worked on this ({p.plan.length} steps)</summary>
-            <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-slate-600">{p.plan.map((s, i) => <li key={i}>{s}</li>)}</ol>
+          <details className="group rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5 text-sm">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-slate-700"><ListTree size={15} aria-hidden className="text-brand-600" /> How I worked on this ({p.plan.length} steps)</summary>
+            <ol className="mt-2.5 space-y-1.5 text-slate-600">{p.plan.map((s, i) => <li key={i} className="flex gap-2.5"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-brand-700 ring-1 ring-brand-200">{i + 1}</span><span>{s}</span></li>)}</ol>
           </details>
         )}
-        <div className="space-y-2 text-sm leading-relaxed whitespace-pre-line text-slate-800">
+        <div className="space-y-2 rounded-2xl rounded-tl-md border border-slate-200/80 bg-white px-4 py-3.5 text-[14.5px] leading-relaxed whitespace-pre-line text-slate-800 shadow-xs">
           {m.content.split("\n\n").map((para, i) => <p key={i}>{para}</p>)}
         </div>
         {p.notes?.map((n, i) => <p key={i} className="text-xs text-slate-500">{n}</p>)}
         {p.blocks?.map((b, i) => b.type === "table" ? (
           <Card key={i} className="overflow-hidden">
-            <p className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-800">{b.title}</p>
+            <p className="border-b border-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-800">{b.title}</p>
             <Table minWidth="560px">
               <THead><TR>{b.columns.map((c) => <TH key={c}>{c}</TH>)}</TR></THead>
               <TBody>{b.rows.map((r, j) => <TR key={j}>{r.map((v, k) => <TD key={k} className="text-sm">{v}</TD>)}</TR>)}</TBody>
@@ -95,13 +100,13 @@ function Answer({ m, proposals, onChoice, onDecide, busy }: {
             {b.note && <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">{b.note}</p>}
           </Card>
         ) : (
-          <div key={i} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+          <div key={i} className="rounded-xl border border-slate-200/80 bg-white p-4 text-sm">
             <p className="font-semibold text-slate-800">{b.title}</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-700">{b.items.map((t, j) => <li key={j}>{t}</li>)}</ul>
           </div>
         ))}
         {p.sources && p.sources.length > 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 text-sm">
             <p className="font-semibold text-slate-800">Approved procedures</p>
             {p.sources.map((s) => <p key={s.source} className="mt-1 text-slate-600"><span className="font-medium">{s.title}</span> ({s.source}): {s.excerpt}</p>)}
           </div>
@@ -110,7 +115,7 @@ function Answer({ m, proposals, onChoice, onDecide, busy }: {
         {p.links && p.links.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {p.links.map((l) => (
-              <Link key={l.href + l.label} href={l.href} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50">
+              <Link key={l.href + l.label} href={l.href} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:border-brand-200 hover:bg-brand-50">
                 {l.label} <ExternalLink size={12} aria-hidden />
               </Link>
             ))}
@@ -120,7 +125,7 @@ function Answer({ m, proposals, onChoice, onDecide, busy }: {
           <div className="flex flex-wrap gap-2" data-choices>
             {p.choices.map((c) => (
               <button key={c.label} type="button" disabled={busy} onClick={() => onChoice(c.text)}
-                className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50">
+                className="rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-sm font-medium text-brand-700 shadow-xs transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50">
                 {c.label}
               </button>
             ))}
@@ -238,26 +243,46 @@ export default function CopilotPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Bot} eyebrow="Assistant" title="Kitchen Copilot"
-        description="Ask in plain words. Copilot reads your campus records through permission-checked tools, shows its working, and prepares actions that only take effect when a person approves them."
-        meta={status.enabled ? (
-          <span className="text-xs text-slate-500">
-            {status.reader === "gemini" ? `Language model: ${status.external_model}` : "Built-in request reader (no external AI)"} · Figures always come from the application
-          </span>) : undefined}
-      />
+      <section className="relative overflow-hidden rounded-[1.4rem] bg-slate-900 px-5 py-6 text-white shadow-card sm:px-8 sm:py-7">
+        <div aria-hidden className="pointer-events-none absolute -top-20 -right-10 h-64 w-64 rounded-full bg-brand-600/45 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-sand/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-brand-200 ring-1 ring-white/15 sm:flex"><Bot size={22} aria-hidden /></span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-200 uppercase">Assistant</p>
+              <h1 className="font-display mt-1 text-[1.9rem] leading-tight font-medium sm:text-[2.2rem]">Kitchen Copilot</h1>
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-white/70">Ask in plain words. Copilot reads your campus records through permission-checked tools, shows its working, and prepares actions that only take effect when a person approves them.</p>
+            </div>
+          </div>
+          {status.enabled && (
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-white/85 ring-1 ring-white/15">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {status.reader === "gemini" ? `Language model: ${status.external_model}` : "Built-in request reader (no external AI)"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-white/85 ring-1 ring-white/15">
+                <ShieldCheck size={13} aria-hidden /> Figures always come from the application
+              </span>
+            </div>
+          )}
+        </div>
+      </section>
 
       {!status.enabled ? (
-        <EmptyState icon={ShieldAlert} title="Kitchen Copilot is turned off"
-          description="An administrator can turn it on with the AGENT_ENABLED setting. Every other screen works normally while it is off." />
+        <Card>
+          <EmptyState icon={ShieldAlert} title="Kitchen Copilot is turned off"
+            description="An administrator can turn it on with the AGENT_ENABLED setting. Every other screen works normally while it is off." />
+        </Card>
       ) : (
         <>
           <SegmentedControl label="View" value={tab} onChange={setTab} options={[{ value: "chat", label: "Conversation" }, { value: "proposals", label: "Proposals to review" }]} />
 
           {tab === "proposals" ? (
             queue === null ? <TableSkeleton rows={3} /> : queue.length === 0 ? (
-              <EmptyState title="No proposals" description="Proposals Copilot prepares for you, or that you may approve, appear here." />
+              <Card><EmptyState icon={ClipboardSignature} title="No proposals" description="Proposals Copilot prepares for you, or that you may approve, appear here." /></Card>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-2" data-queue>
+              <div className="grid gap-4 lg:grid-cols-2" data-queue>
                 {queue.map((p) => (
                   <div key={p.id} className="space-y-1">
                     <p className="text-xs text-slate-500">{WORKFLOW_LABELS[p.workflow]} · asked by {p.created_by_name} · {formatDateTime(p.created_at)}</p>
@@ -267,14 +292,15 @@ export default function CopilotPage() {
               </div>
             )
           ) : (
-            <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
               <Card className="hidden h-fit p-3 lg:block">
+                <p className="px-2 pt-1 pb-2 text-[10.5px] font-semibold tracking-[0.14em] text-slate-500 uppercase">Conversations</p>
                 <Button variant="secondary" size="sm" className="w-full" icon={<MessageSquarePlus size={15} />} onClick={() => setThread(null)}>New conversation</Button>
                 <ul className="mt-3 space-y-1 text-sm">
                   {conversations.map((c) => (
                     <li key={c.id}>
                       <button type="button" onClick={() => openConversation(c.id)}
-                        className={`w-full truncate rounded-lg px-2 py-1.5 text-left hover:bg-slate-100 ${thread?.id === c.id ? "bg-brand-50 font-medium text-brand-800" : "text-slate-700"}`}>
+                        className={`w-full truncate rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-brand-50/70 ${thread?.id === c.id ? "bg-brand-50 font-medium text-brand-800 ring-1 ring-brand-100" : "text-slate-700"}`}>
                         {c.title}
                       </button>
                     </li>
@@ -283,25 +309,30 @@ export default function CopilotPage() {
                 </ul>
               </Card>
 
-              <Card className="flex min-h-[60vh] flex-col">
-                <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
-                  <p className="truncate text-sm font-semibold text-slate-800">{thread?.title ?? "New conversation"}</p>
+              <Card className="flex min-h-[64vh] flex-col overflow-hidden">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
+                  <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-brand-500" /><span className="truncate">{thread?.title ?? "New conversation"}</span></p>
                   <div className="flex shrink-0 gap-1">
                     {thread?.id ? <Button variant="ghost" size="sm" icon={<ListTree size={15} />} onClick={showTrace}>Steps</Button> : null}
                     <Button variant="ghost" size="sm" className="lg:hidden" icon={<MessageSquarePlus size={15} />} onClick={() => setThread(null)}>New</Button>
                   </div>
                 </div>
-                <div className="flex-1 space-y-6 overflow-y-auto p-4" data-thread>
+                <div className="flex-1 space-y-6 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,rgb(213_199_177/0.35)_1px,transparent_0)] [background-size:22px_22px] p-4 sm:p-6" data-thread>
                   {!thread || thread.messages.length === 0 ? (
-                    <div className="mx-auto max-w-xl space-y-3 py-6 text-center">
-                      <p className="text-sm text-slate-600">Try one of the three jobs Copilot can do:</p>
-                      <div className="grid gap-2">
+                    <div className="mx-auto max-w-2xl space-y-5 py-6 text-center sm:py-10">
+                      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-raised"><Sparkles size={24} aria-hidden /></span>
+                      <div>
+                        <p className="font-display text-2xl font-medium text-slate-900">What can I help with?</p>
+                        <p className="mt-1 text-sm text-slate-600">Try one of the three jobs Copilot can do:</p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
                         {EXAMPLES.map((e) => (
                           <button key={e.label} type="button" disabled={sending || !status.workflows[e.label === "Plan and procure" ? "plan_procure" : e.label === "Explain spending" ? "explain_spending" : "stock_difference"]}
                             onClick={() => send(e.text)}
-                            className="rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50">
-                            <span className="font-semibold text-slate-800">{e.label}</span>
-                            <span className="mt-0.5 block text-slate-600">{e.text}</span>
+                            className="group flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 text-left text-sm shadow-xs transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-raised disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0">
+                            {(() => { const Icon: LucideIcon = e.label === "Plan and procure" ? ShoppingBasket : e.label === "Explain spending" ? PieChart : ListTree; return <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100"><Icon size={17} aria-hidden /></span>; })()}
+                            <span className="mt-3 font-semibold text-slate-900">{e.label}</span>
+                            <span className="mt-1 block leading-relaxed text-slate-600">{e.text}</span>
                           </button>
                         ))}
                       </div>
@@ -309,20 +340,23 @@ export default function CopilotPage() {
                     </div>
                   ) : thread.messages.map((m) => m.role === "user" ? (
                     <div key={m.id} className="flex justify-end">
-                      <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-brand-600 px-4 py-2 text-sm text-white">{m.content}</p>
+                      <p className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-[14.5px] leading-relaxed text-white shadow-sm">{m.content}</p>
                     </div>
                   ) : (
                     <Answer key={m.id} m={m} proposals={thread.proposals} onChoice={send} onDecide={onDecide} busy={sending} />
                   ))}
-                  {sending && <Spinner label="Working through your records…" className="justify-start" />}
+                  {sending && <Spinner label="Working through your records…" className="justify-start pl-12" />}
                   <div ref={end} />
                 </div>
-                <form className="flex items-end gap-2 border-t border-slate-100 p-3" onSubmit={(e) => { e.preventDefault(); send(text); }}>
+                <form className="border-t border-slate-100 bg-white p-3 sm:p-4" onSubmit={(e) => { e.preventDefault(); send(text); }}>
+                  <div className="flex items-end gap-2 rounded-2xl border border-slate-300/80 bg-white p-1.5 pl-3 shadow-xs transition-[border-color,box-shadow] focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15">
                   <label htmlFor="copilot-input" className="sr-only">Message</label>
                   <textarea id="copilot-input" rows={2} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
-                    placeholder="Ask Kitchen Copilot…" className="min-h-11 flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none" />
-                  <Button type="submit" loading={sending} disabled={text.trim().length < 2} icon={<Send size={16} />}>Send</Button>
+                    placeholder="Ask Kitchen Copilot…" className="min-h-11 min-w-0 flex-1 resize-none border-0 bg-transparent py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none" />
+                  <Button type="submit" loading={sending} disabled={text.trim().length < 2} icon={<ArrowUp size={16} />} className="rounded-xl">Send</Button>
+                  </div>
+                  <p className="mt-2 px-1 text-[11px] text-slate-500">Enter to send · Shift + Enter for a new line · Nothing changes until a person approves it.</p>
                 </form>
               </Card>
             </div>
@@ -356,7 +390,7 @@ export default function CopilotPage() {
         {trace === null ? <TableSkeleton rows={4} /> : (
           <ol className="space-y-2 text-sm">
             {trace.map((s) => (
-              <li key={s.id} className="rounded-lg border border-slate-200 p-2">
+              <li key={s.id} className="rounded-xl border border-slate-200/80 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={s.ok ? "neutral" : "danger"}>{s.kind}</Badge>
                   <span className="font-medium text-slate-800">{s.name}</span>
@@ -364,7 +398,7 @@ export default function CopilotPage() {
                 </div>
                 <details className="mt-1">
                   <summary className="cursor-pointer text-xs text-slate-500">Input and result</summary>
-                  <pre className="mt-1 max-h-60 overflow-auto rounded bg-slate-50 p-2 text-xs">{JSON.stringify({ input: s.input, output: s.output }, null, 2)}</pre>
+                  <pre className="mt-1.5 max-h-60 overflow-auto rounded-lg bg-slate-50 p-2.5 text-xs">{JSON.stringify({ input: s.input, output: s.output }, null, 2)}</pre>
                 </details>
               </li>
             ))}

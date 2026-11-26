@@ -21,27 +21,27 @@ export default function PageHeader({
   meta,
 }: Props) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="flex flex-col gap-4 pb-1 sm:flex-row sm:items-end sm:justify-between">
       <div className="flex min-w-0 items-start gap-4">
         {Icon && (
-          <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600 sm:flex">
+          <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-brand-100 bg-gradient-to-b from-white to-brand-50 text-brand-700 shadow-xs sm:flex">
             <Icon size={21} aria-hidden />
           </div>
         )}
 
         <div className="min-w-0">
           {eyebrow && (
-            <p className="mb-1 text-xs font-semibold tracking-wide text-brand-600 uppercase">
+            <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] text-brand-700 uppercase">
               {eyebrow}
             </p>
           )}
 
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="font-display text-[1.7rem] leading-tight font-medium text-slate-900 sm:text-[2rem]">
             {title}
           </h1>
 
           {description && (
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500">
               {description}
             </p>
           )}

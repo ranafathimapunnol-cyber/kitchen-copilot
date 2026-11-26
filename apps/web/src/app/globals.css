@@ -1,34 +1,88 @@
 @import "tailwindcss";
 
 /*
- * Kitchen Copilot design tokens.
+ * Kitchen Copilot design tokens — warm ivory theme.
  *
- * brand-500 (#2a78d6) is the accent: chart marks, icons, focus rings.
- * White text on it measures 4.42:1, just under WCAG AA, so filled buttons
- * use brand-600 (5.49:1) and blue text uses brand-600 or darker.
- * accent-500 (#eb6834) is for marks only; as text on white it is 3.2:1.
- * Meaningful text is slate-500 or darker; slate-400 is 2.56:1 on white.
+ * The whole application is themed here. Pages use the standard Tailwind
+ * names (slate, white, brand, emerald, amber, red); this block redefines
+ * them, so every screen follows one palette:
+ *   ivory   #F5F0E6  page background        (slate-50)
+ *   cream   #FFFCF6  cards and panels       (white)
+ *   sand    #E8DDCA  secondary surfaces     (sand)
+ *   coffee  #8B6F50  primary actions        (brand-600; cream text 4.57:1)
+ *   espresso#382D25  main text              (slate-900)
+ *   warm grey #736659 secondary text        (slate-500; 4.9:1 on ivory)
+ * Green, amber and red are muted and reserved for statuses.
  */
 @theme {
-  --color-brand-50: #eef5fd;
-  --color-brand-100: #d9e8fa;
-  --color-brand-200: #b6d2f4;
-  --color-brand-300: #85b3ec;
-  --color-brand-500: #2a78d6;
-  --color-brand-600: #2268c2;
-  --color-brand-700: #1c58a6;
-  --color-brand-800: #194a87;
+  --color-white: #fffcf6;
+  --color-sand: #e8ddca;
+  --color-ivory: #f5f0e6;
 
-  --color-accent-50: #fdf1ec;
-  --color-accent-500: #eb6834;
+  --color-slate-50: #f5f0e6;
+  --color-slate-100: #efe7d9;
+  --color-slate-200: #e5dac8;
+  --color-slate-300: #d5c7b1;
+  --color-slate-400: #a99b88;
+  --color-slate-500: #736659;
+  --color-slate-600: #5f5246;
+  --color-slate-700: #4a3e35;
+  --color-slate-800: #3f342b;
+  --color-slate-900: #382d25;
+  --color-slate-950: #261e18;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-brand-50: #f7f0e6;
+  --color-brand-100: #eee1cf;
+  --color-brand-200: #dfcaae;
+  --color-brand-300: #c8ab88;
+  --color-brand-400: #a98b69;
+  --color-brand-500: #9a7c5b;
+  --color-brand-600: #8b6f50;
+  --color-brand-700: #6f5940;
+  --color-brand-800: #564431;
+  --color-brand-900: #3f3124;
 
-  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04),
-    0 1px 3px 0 rgb(15 23 42 / 0.03);
-  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08),
-    0 2px 4px -2px rgb(15 23 42 / 0.04);
-  --shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.25);
+  --color-accent-50: #eef2f5;
+  --color-accent-500: #4f7088;
+
+  --color-emerald-50: #eef4ec;
+  --color-emerald-100: #dce9d8;
+  --color-emerald-200: #c3d9be;
+  --color-emerald-500: #5e9470;
+  --color-emerald-600: #47805a;
+  --color-emerald-700: #33694a;
+  --color-emerald-800: #2a573d;
+
+  --color-amber-50: #fbf3e2;
+  --color-amber-100: #f5e6c4;
+  --color-amber-200: #ecd39f;
+  --color-amber-500: #c48a2c;
+  --color-amber-600: #a8741c;
+  --color-amber-700: #85590f;
+  --color-amber-800: #6c480c;
+  --color-amber-900: #573a0a;
+
+  --color-red-50: #fbede8;
+  --color-red-100: #f5dad1;
+  --color-red-200: #ebc0b3;
+  --color-red-500: #c25a44;
+  --color-red-600: #a8432f;
+  --color-red-700: #8f3726;
+  --color-red-800: #742c1f;
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+
+  --shadow-xs: 0 1px 1px 0 rgb(56 45 37 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(56 45 37 / 0.06);
+  --shadow-card: 0 1px 2px 0 rgb(56 45 37 / 0.04),
+    0 4px 14px -6px rgb(56 45 37 / 0.07);
+  --shadow-raised: 0 10px 28px -12px rgb(56 45 37 / 0.18),
+    0 2px 6px -2px rgb(56 45 37 / 0.06);
+  --shadow-overlay: 0 30px 60px -18px rgb(38 30 24 / 0.35);
 
   --animate-fade-in: fade-in 150ms ease-out;
   --animate-pop-in: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -68,8 +122,8 @@
 
 :root {
   color-scheme: light;
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f5f0e6;
+  --foreground: #382d25;
 }
 
 * {
@@ -115,6 +169,19 @@ h3 {
   text-wrap: balance;
 }
 
+/* Page titles and display figures use the serif display face. */
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+/* Thin, warm scrollbars for the sidebar and scrolling tables. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d5c7b1 transparent;
+}
+
 /* One visible focus treatment for every interactive element. */
 :focus-visible {
   outline: 2px solid var(--color-brand-500);
@@ -135,7 +202,7 @@ textarea:focus-visible {
 
 /* Native <dialog> backdrop for Modal. */
 dialog::backdrop {
-  background: rgb(15 23 42 / 0.45);
+  background: rgb(38 30 24 / 0.42);
   backdrop-filter: blur(2px);
 }
 

@@ -8,7 +8,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("animate-pulse rounded-md bg-slate-200/70", className)}
+      className={cn("animate-pulse rounded-lg bg-slate-200/60", className)}
     />
   );
 }
@@ -87,7 +87,7 @@ export function EmptyState({
     >
       <div
         className={cn(
-          "flex items-center justify-center rounded-full bg-slate-100 text-slate-400",
+          "flex items-center justify-center rounded-2xl bg-sand/50 text-brand-600",
           compact ? "h-10 w-10" : "h-12 w-12"
         )}
       >
