@@ -216,6 +216,7 @@ def test_plan_and_procure_proposes_drafts_and_executes_only_after_approval(clien
     done = ok(client.post(f"{AGENT}/proposals/{order['id']}/approve", json={"note": "Checked"}))
     assert done["status"] == "EXECUTED" and done["result"]["entity"] == "PURCHASE_ORDER"
     po = db.query(PurchaseOrder).one()
+    assert done["result"]["href"] == f"/dashboard/purchase-orders/{po.id}"  # the new order, not the list
     assert po.status == "DRAFT"
     assert client.post(f"{AGENT}/proposals/{order['id']}/approve", json={}).status_code == 409  # no duplicate
     plan = next(p for p in first["proposals"] if p["action_type"] == "CREATE_MEAL_PLAN_DRAFT")
@@ -329,3 +330,103 @@ def test_fake_llm_reader_is_used_and_failure_falls_back(client, db, plan_world, 
     fallback = ask(client, "Plan tomorrow's lunch for 300 people")
     assert fallback["answer"]["payload"]["reader"] == "rules"
     assert db.query(AgentStep).filter(AgentStep.name == "gemini_read", AgentStep.ok.is_(False)).count() == 1
+
+
+# ============================================================
+# STAGE 12 — FIXES FROM THE 27 NOVEMBER REVIEW ON REALISTIC DATA
+# ============================================================
+
+NAMES = {"sessions": [(1, "Breakfast"), (2, "Lunch"), (4, "Dinner"), (10, "breakfast")],
+         "menus": [(1, "Monday Breakfast", 1), (3, "Monday Lunch", 2)],
+         "items": [(5, "Rice"), (6, "Basmati Rice")], "categories": [(7, "Vegetables"), (8, "Grains")]}
+REVIEW_DAY = date(2026, 11, 27)
+
+
+@pytest.mark.parametrize("text, day, headcount", [
+    ("plan dinner on 30 november for 200", "2026-11-30", 200),
+    ("plan lunch on nov 30th for 300 people", "2026-11-30", 300),
+    ("plan lunch 30/11 for 120", "2026-11-30", 120),
+    ("plan lunch on 2 jan", "2027-01-02", None),  # a day this far past means next year
+    ("plan lunch tomorrow for 2027", "2026-11-28", None),  # a year, not people
+    ("plan lunch on 31 february", None, None),  # no such day: ask, don't guess
+])
+def test_rule_reader_understands_written_dates_and_bare_headcounts(text, day, headcount):
+    found = agent_intent.rule_read(text, REVIEW_DAY, NAMES)
+    assert (found.workflow, found.plan_date, found.headcount) == ("plan_procure", day, headcount)
+
+
+@pytest.mark.parametrize("text, period, compare", [
+    ("explain spending in october", ("2026-10-01", "2026-10-31"), "full"),
+    ("spending from 1 november to 15 november", ("2026-11-01", "2026-11-15"), "previous"),
+    ("why did spending go up this month", ("2026-11-01", "2026-11-27"), "elapsed"),
+])
+def test_rule_reader_spending_periods(text, period, compare):
+    found = agent_intent.rule_read(text, REVIEW_DAY, NAMES)
+    assert (found.workflow, (found.date_from, found.date_to), found.compare) == ("explain_spending", period, compare)
+
+
+def test_rule_reader_reads_categories_and_prefers_a_session_with_menus():
+    veg = agent_intent.rule_read("how much did we spend on vegetables last month", REVIEW_DAY, NAMES)
+    assert (veg.category_id, veg.item_id) == (7, None)
+    # "Breakfast" (id 1, has menus) and "breakfast" (id 10, none) tie on the name (open question C5).
+    assert agent_intent.rule_read("what do we need to buy for breakfast tomorrow", REVIEW_DAY, NAMES).meal_session_id == 1
+
+
+def spending_bills(db, a, category=None):
+    today = campus_today()
+    for day, rate in ((today.replace(day=1) - timedelta(days=20), "50"), (today, "60")):
+        bill = Purchase(campus_id=a.campus.id, supplier_id=a.supplier.id, invoice_number=f"F-{rate}", purchase_date=day,
+                        subtotal=Decimal(rate) * 10, discount=0, extra_charges=Decimal("5"),
+                        grand_total=Decimal(rate) * 10 + 5, status="DRAFT", created_by=a.admin.id)
+        db.add(bill)
+        db.flush()
+        db.add(PurchaseItem(campus_id=a.campus.id, purchase_id=bill.id, item_id=a.item.id, quantity=Decimal("10"),
+                            unit_id=a.kg.id, unit_rate=Decimal(rate), line_total=Decimal(rate) * 10))
+    db.commit()
+
+
+def test_spending_answer_follows_a_named_category_or_item(client, db, kitchen, agent_on):
+    a = kitchen.a
+    spending_bills(db, a)
+    act_as(client, a.manager)
+    reply = ask(client, "Why did grains spending change this month?")
+    text, payload = reply["answer"]["content"], reply["answer"]["payload"]
+    assert "Grains only" in text and "Grains spending" in text and "₹600.00" in text  # line totals, not ₹605.00
+    assert f"category_id={a.category.id}" in payload["links"][0]["href"]
+    rice = ask(client, "explain rice spending this month")
+    assert "Rice only" in rice["answer"]["content"]
+    assert f"item_id={a.item.id}" in rice["answer"]["payload"]["links"][0]["href"]
+    rows = [r for b in rice["answer"]["payload"]["blocks"] if b["type"] == "table" for r in b["rows"]]
+    assert not any(cell in ("not_bought_now", "new", "incompatible") for r in rows for cell in r)
+
+
+def test_asking_again_does_not_queue_the_same_proposal_twice(client, db, kitchen, agent_on):
+    a = kitchen.a
+    act_as(client, a.admin)
+    ok(client.post("/api/stock-counts", json={"reason": "Weekly count", "lines": [{"item_id": a.item.id, "quantity": "8"}]}), 201)
+    act_as(client, a.manager)
+    question = "Today's Rice count is 12 kg below the system. Find out why."
+    first = ask(client, question)
+    again = ask(client, question, first["conversation_id"])
+    elsewhere = ask(client, question)
+    assert [p["id"] for p in again["proposals"]] == [p["id"] for p in first["proposals"]]  # shown again, same one
+    assert not elsewhere["proposals"] and "already waiting for a decision" in elsewhere["answer"]["content"]
+    assert db.query(AgentProposal).count() == 1
+    movements = [b for b in first["answer"]["payload"]["blocks"] if b.get("title", "").startswith("Movements")]
+    assert movements and all(b["rows"] for b in movements)  # a table only when there is something in it
+    done = ok(client.post(f"{AGENT}/proposals/{first['proposals'][0]['id']}/approve", json={}))
+    adjustment = db.query(StockAdjustment).one()
+    assert done["result"]["href"] == f"/dashboard/stock-adjustments/{adjustment.id}"
+
+
+def test_session_without_menu_offers_only_sessions_that_have_one(client, db, plan_world, agent_on):
+    from app.models.master_data import MealSession
+    a = plan_world.a
+    db.add(MealSession(campus_id=a.campus.id, name="Supper"))
+    db.commit()
+    act_as(client, a.manager)
+    reply = ask(client, "Plan supper tomorrow for 100 people")
+    payload = reply["answer"]["payload"]
+    assert payload["status"] == "needs_info" and "no active menu" in reply["answer"]["content"]
+    offered = {c["label"] for c in payload["choices"]}
+    assert "Supper" not in offered and offered <= {"Lunch", "Dinner", "Breakfast", "  breakfast "}

@@ -65,7 +65,7 @@ def execute(db: Session, user: User, p: AgentProposal) -> dict:
                              expected_headcount=data["expected_headcount"], notes=data.get("notes"),
                              lines=[LineInput(item_id=l["item_id"]) for l in data["lines"]])
         plan = create_plan(payload=payload, db=db, user=user)
-        return {"entity": "MEAL_PLAN", "id": plan["id"], "number": plan["plan_number"], "href": "/dashboard/meal-plans"}
+        return {"entity": "MEAL_PLAN", "id": plan["id"], "number": plan["plan_number"], "href": f"/dashboard/meal-plans/{plan['id']}"}
     if p.action_type == "CREATE_PURCHASE_ORDER_DRAFT":
         from app.api.routes.purchase_orders import OrderInput, OrderLineInput, create_order
         payload = OrderInput(supplier_id=data["supplier_id"], order_date=data["order_date"],
@@ -74,14 +74,15 @@ def execute(db: Session, user: User, p: AgentProposal) -> dict:
                                                    unit_id=i["unit_id"]) for i in data["items"]])
         order = create_order(payload=payload, db=db, user=user)
         return {"entity": "PURCHASE_ORDER", "id": order["id"], "number": order["order_number"],
-                "href": "/dashboard/purchase-orders"}
+                "href": f"/dashboard/purchase-orders/{order['id']}"}
     if p.action_type == "RAISE_STOCK_ADJUSTMENT_REQUEST":
         from app.api.routes.kitchen import Reason
         from app.api.routes.stock_counts import raise_adjustment
         result = raise_adjustment(count_id=data["count_id"], line_id=data["line_id"],
                                   payload=Reason(reason=data["reason"]), db=db, user=user)
-        return {"entity": "STOCK_ADJUSTMENT", "id": result.get("id"), "number": data.get("count_number"),
-                "href": "/dashboard/stock-counts"}
+        adjustment_id = result.get("id")
+        return {"entity": "STOCK_ADJUSTMENT", "id": adjustment_id, "number": data.get("count_number"),
+                "href": f"/dashboard/stock-adjustments/{adjustment_id}" if adjustment_id else "/dashboard/stock-counts"}
     raise HTTPException(status_code=422, detail="Unknown action")
 
 

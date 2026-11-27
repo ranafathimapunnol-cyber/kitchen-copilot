@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChartColumn, FileSearch, Paperclip, TrendingUp, Wallet, X } from "lucide-react";
 
 import { api } from "@/lib/api/client";
@@ -42,13 +43,47 @@ function Change({ value }: { value: string | null }) {
   return <span className={n > 0 ? "text-red-700" : n < 0 ? "text-emerald-700" : "text-slate-700"}>{percentText(value)}</span>;
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ID = /^\d+$/;
+
+/**
+ * A link may open the page on a given period and filter (Kitchen Copilot's
+ * "Open in Spending Analysis" does): date_from, date_to, compare,
+ * category_id, item_id. Anything malformed is ignored.
+ */
+function initialFilters(query: URLSearchParams) {
+  const from = query.get("date_from") ?? "";
+  const to = query.get("date_to") ?? "";
+  const compare = query.get("compare");
+  const category = query.get("category_id") ?? "";
+  const item = query.get("item_id") ?? "";
+  const custom = ISO_DAY.test(from) && ISO_DAY.test(to) && from <= to;
+  return {
+    preset: (custom ? "custom" : "month") as Preset,
+    period: custom ? { from, to } : presetPeriod("month", new Date()),
+    compare: (compare === "full" || compare === "previous" || compare === "elapsed" ? compare : "elapsed") as CompareMode,
+    categoryId: ID.test(category) ? category : "",
+    itemId: ID.test(item) ? item : "",
+  };
+}
+
 /** DASH01–DASH05: purchase expenditure, comparisons, price and quantity effects, drill-down to bills. */
 export default function SpendingAnalysisPage() {
-  const [preset, setPreset] = useState<Preset>("month");
-  const [period, setPeriod] = useState(() => presetPeriod("month", new Date()));
-  const [compare, setCompare] = useState<CompareMode>("elapsed");
-  const [categoryId, setCategoryId] = useState("");
-  const [itemId, setItemId] = useState("");
+  return (
+    <Suspense fallback={<TableSkeleton rows={5} />}>
+      <SpendingAnalysis />
+    </Suspense>
+  );
+}
+
+function SpendingAnalysis() {
+  const query = useSearchParams();
+  const [initial] = useState(() => initialFilters(new URLSearchParams(query.toString())));
+  const [preset, setPreset] = useState<Preset>(initial.preset);
+  const [period, setPeriod] = useState(initial.period);
+  const [compare, setCompare] = useState<CompareMode>(initial.compare);
+  const [categoryId, setCategoryId] = useState(initial.categoryId);
+  const [itemId, setItemId] = useState(initial.itemId);
   const [supplierId, setSupplierId] = useState("");
   const [options, setOptions] = useState<AnalyticsOptions | null>(null);
   const [data, setData] = useState<SpendingAnalysis | null>(null);

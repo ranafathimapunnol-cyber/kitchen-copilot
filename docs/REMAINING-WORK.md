@@ -16,6 +16,27 @@ version of this file because other documents refer to them.
 **Nothing is ACCEPTED** (no client walkthrough yet) and **nothing is
 DEPLOYED** (no public or production deployment exists).
 
+## Client-acceptance readiness (27 November 2026)
+
+| Status | Count | Rows |
+|---|---|---|
+| TESTED | 41 | every other requirement, AT01–AT08, and the cross-cutting rows except authorisation |
+| IN_PROGRESS | 4 | PUR03 (client answer: several receipts per purchase, §4.3); STK01 and OUT03 (supplier returns, need PUR05 / Q6); four-role authorisation (SUPER_ADMIN migration `d5e8f0b2a314` awaiting authorization) |
+| PENDING | 1 | PUR05 (Q6) |
+| ACCEPTED | 0 | no client walkthrough yet |
+| DEPLOYED | 0 | no hosting chosen (Q17/Q18) |
+
+Ready for a client walkthrough: every TESTED row, on the development
+site. Rows marked "interim" (Q4, Q5, Q19, C5 matching, ADR-005/009
+deviations) need the client to confirm or replace the interim rule during
+the walkthrough. Not ready: the five open rows above, which wait for
+client answers or approval, not for development.
+
+27 November work: Kitchen Copilot review on realistic data (eight defects
+fixed, `STAGE-10-12-NOTES.md`); release guide now covers `COOKIE_SECURE`,
+client addresses behind nginx (required before release; see
+`RELEASE-GUIDE.md` §2) and the unapproved Gemini key.
+
 ## Update 26 November 2026 (Stages 9, 10, 12, 13 preparation)
 
 | Row | Stage | Result |

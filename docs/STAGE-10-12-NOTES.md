@@ -80,9 +80,37 @@ same ADR-010 contract. ADR-009's PostgreSQL JSON option is used for traces.
 says guidance is unavailable from approved sources); a live Gemini key (not
 configured — the FakeLLM tests cover that path).
 
+## Review on realistic data (27 November 2026)
+
+The three workflows were run through the HTTP API, with approval and
+rejection, as ADMIN, KITCHEN_MANAGER and STAFF, against a throwaway copy
+of the development database (no change to the development data). Defects
+found and fixed:
+
+- Dates written as day and month ("30 November", "Nov 30th", "30/11") and
+  explicit periods ("1 November to 15 November") were not understood; a
+  bare headcount in a planning request ("for 200") was ignored.
+- A category or item named in a spending question ("spend on vegetables")
+  was ignored and the whole campus was explained. The answer now covers
+  that category or item (bill line totals) and says so.
+- When a meal session had no menu, the sessions offered instead included
+  sessions without menus too. With duplicate session names ("Breakfast" /
+  "breakfast", open question C5) the reader picked the one without menus.
+- Raw status codes ("not_bought_now") appeared in the drivers table.
+- Asking the same question again queued an identical pending proposal;
+  now the waiting one is shown again (same conversation) or named.
+- An empty "movements" table was shown when there were no movements.
+- The result of an approved action linked to a list, not to the new record.
+- The Spending Analysis page ignored the period and filter in Copilot's
+  "Open in Spending Analysis" link.
+
+The external model still receives only session, menu and item names
+(categories are matched locally).
+
 ## Tests
 
-`services/api/tests/test_stage10_12.py` (16 tests; 3 more Stage 11 tests
+`services/api/tests/test_stage10_12.py` (30 tests after the 27 November
+review; 3 more Stage 11 tests
 held with M1); `apps/web/tests/access.test.mjs`. Full backend suite with
 Stages 10–12 together: 767 passed. Stage 10+12 code: targeted suites 154
 passed. M7 rehearsal on a throwaway PostgreSQL (14 of 14): empty database

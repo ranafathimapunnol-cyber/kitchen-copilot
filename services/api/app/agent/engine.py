@@ -9,10 +9,12 @@ business data.
 Workflows: plan_procure, explain_spending, stock_difference.
 """
 
+import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from app.agent import tools as T
@@ -70,6 +72,11 @@ def day_text(value: str | date) -> str:
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b %Y')}"
 
 
+# How an item compares between the two periods (purchase_analytics statuses).
+STATUS_TEXT = {"NEW": "not bought before", "NOT_BOUGHT_NOW": "not bought this period",
+               "INCOMPATIBLE": "units not comparable"}
+
+
 def ask(reply: Reply, question: str, choices: list[tuple[str, str]]):
     reply.status = "needs_info"
     reply.say(question)
@@ -92,8 +99,33 @@ def add_procedures(trace: T.Trace, reply: Reply, topic: str):
                   "covers this yet).")
 
 
+def same_pending(trace: T.Trace, action: str, payload: dict) -> AgentProposal | None:
+    """An identical proposal on this campus still waiting for a decision."""
+    from app.agent.executor import expired
+
+    wanted = json.dumps(jsonable_encoder(payload), sort_keys=True)
+    for p in trace.db.query(AgentProposal).filter(AgentProposal.campus_id == trace.user.campus_id,
+                                                  AgentProposal.action_type == action,
+                                                  AgentProposal.status == "PENDING"):
+        if not expired(p) and json.dumps(jsonable_encoder(p.payload), sort_keys=True) == wanted:
+            return p
+    return None
+
+
 def propose(trace: T.Trace, reply: Reply, workflow: str, action: str, title: str, rationale: str, payload: dict,
-            permission: str) -> AgentProposal:
+            permission: str) -> AgentProposal | None:
+    # Asking again must not queue the same action twice: in this conversation
+    # the waiting proposal is shown again; from another one it is named.
+    existing = same_pending(trace, action, payload)
+    if existing:
+        trace.record("plan", "propose", {"action": action, "title": title},
+                     {"existing_proposal_id": existing.id, "created": False})
+        if existing.conversation_id == trace.conversation_id:
+            reply.proposals.append(existing)
+        else:
+            reply.say(f"The same proposal (\u201c{existing.title}\u201d) is already waiting for a decision under "
+                      "Proposals to review, so I have not prepared it again.")
+        return existing
     p = AgentProposal(campus_id=trace.user.campus_id, conversation_id=trace.conversation_id, workflow=workflow,
                       action_type=action, title=title[:300], rationale=rationale, payload=payload,
                       required_permission=permission, status="PENDING", created_by=trace.user.id, result={})
@@ -129,8 +161,13 @@ def plan_procure(trace: T.Trace, reply: Reply, today: date):
         return ask(reply, "Which meal session?", [(s["name"], s["name"]) for s in sessions])
     menus = [m for m in options["menus"] if m["meal_session_id"] == intent.meal_session_id]
     if not menus:
-        return ask(reply, "That meal session has no active menu. Choose another session.",
-                   [(s["name"], s["name"]) for s in sessions if s["id"] != intent.meal_session_id])
+        with_menus = {m["meal_session_id"] for m in options["menus"]}
+        others = [(s["name"], s["name"]) for s in sessions if s["id"] != intent.meal_session_id and s["id"] in with_menus]
+        if not others:
+            return ask(reply, "No meal session has an active menu yet, so there is nothing to plan. "
+                              "An Admin or Kitchen Manager can add menus on the Menus screen.", [])
+        intent.meal_session_id = None
+        return ask(reply, "That meal session has no active menu. Choose another session.", others)
     if not intent.menu_id or intent.menu_id not in {m["id"] for m in menus}:
         if len(menus) == 1:
             intent.menu_id = menus[0]["id"]
@@ -155,7 +192,7 @@ def plan_procure(trace: T.Trace, reply: Reply, today: date):
     rows = [[l["item_name"], l["standard"], f'{l["required"]} {l["base_unit_symbol"]}' if l["required"] else "—",
              f'{l["available_stock"]} {l["base_unit_symbol"]}',
              f'{l["gap"]} {l["base_unit_symbol"]}' if l["gap"] not in (None, "0", "0.000") and Decimal(l["gap"]) > 0
-             else "None"] for l in need["lines"]]
+             else "Nothing"] for l in need["lines"]]
     reply.blocks.append({"type": "table", "title": "Requirements (application calculation)",
                          "columns": ["Item", "Approved standard", "Required", "In stock now", "To buy"], "rows": rows,
                          "note": need["availability_note"]})
@@ -237,11 +274,17 @@ def explain_spending(trace: T.Trace, reply: Reply, today: date):
     if end > today:
         end = today
         intent.date_to = end.isoformat()
-    data = T.call(trace, "spending_comparison", date_from=start, date_to=end, compare=intent.compare)
+    # An item named in the request narrows to that item; otherwise a category.
+    scope = {"item_id": intent.item_id} if intent.item_id else {"category_id": intent.category_id} if intent.category_id else {}
+    data = T.call(trace, "spending_comparison", date_from=start, date_to=end, compare=intent.compare, **scope)
     cur, prev = data["periods"]["current"], data["periods"]["previous"]
     t = data["totals"]
     running = end == today and (end + timedelta(days=1)).month == end.month
-    reply.say(f"Spending from {day_text(cur['date_from'])} to {day_text(cur['date_to'])} was {money(t['current'])}, "
+    scope_name = (data.get("filters") or {}).get("item_name") or (data.get("filters") or {}).get("category_name")
+    if scope_name:
+        reply.say(f"This covers {scope_name} only, from the bill lines (bill-level discounts and charges belong to no "
+                  "item or category, so they are not included).")
+    reply.say(f"{scope_name + ' spending' if scope_name else 'Spending'} from {day_text(cur['date_from'])} to {day_text(cur['date_to'])} was {money(t['current'])}, "
               f"against {money(t['previous'])} for {day_text(prev['date_from'])} to {day_text(prev['date_to'])}: "
               f"a change of {money(t['change'])} ({pct(t['change_percent'])}).")
     if running:
@@ -258,7 +301,7 @@ def explain_spending(trace: T.Trace, reply: Reply, today: date):
                                          "Price effect", "Quantity effect"],
                              "rows": [[r["item_name"], money(r["value_change"]), pct(r["price_change_percent"]),
                                        f'{r["quantity_change"]} {r["standard_unit_symbol"] or ""}'.strip()
-                                       if r["status"] == "COMPARABLE" else r["status"].lower(),
+                                       if r["status"] == "COMPARABLE" else STATUS_TEXT.get(r["status"], r["status"].lower()),
                                        money(r["price_effect"]) if r["price_effect"] else "—",
                                        money(r["quantity_effect"]) if r["quantity_effect"] else "—"] for r in drivers]})
         top = drivers[0]
@@ -283,6 +326,7 @@ def explain_spending(trace: T.Trace, reply: Reply, today: date):
                   "price comparison.")
     reply.say("Bill-level discounts and extra charges are not shared out to items (open question Q5).")
     q = f"?date_from={cur['date_from']}&date_to={cur['date_to']}&compare={intent.compare}"
+    q += "".join(f"&{key}={value}" for key, value in scope.items())
     reply.links.append({"label": "Open in Spending Analysis (source bills)", "href": f"/dashboard/analytics{q}"})
 
 
@@ -329,12 +373,15 @@ def stock_difference(trace: T.Trace, reply: Reply, today: date, text: str):
         return
     moves = T.call(trace, "item_movements", item_id=intent.item_id, since=counted_at - timedelta(days=14),
                    until=counted_at)
-    reply.blocks.append({"type": "table", "title": "Movements in the 14 days before the count",
-                         "columns": ["When", "Type", "Change", "Balance after", "Reference"],
-                         "rows": [[m["effective_at"][:16].replace("T", " "), m["movement_type"].replace("_", " ").lower(),
-                                   f'{m["signed_quantity"]} {unit}', f'{m["balance_after"]} {unit}',
-                                   m.get("document_number") or m.get("invoice_number") or "—"]
-                                  for m in moves["movements"][:20]]})
+    if moves["movements"]:
+        reply.blocks.append({"type": "table", "title": "Movements in the 14 days before the count",
+                             "columns": ["When", "Type", "Change", "Balance after", "Reference"],
+                             "rows": [[m["effective_at"][:16].replace("T", " "), m["movement_type"].replace("_", " ").lower(),
+                                       f'{m["signed_quantity"]} {unit}', f'{m["balance_after"]} {unit}',
+                                       m.get("document_number") or m.get("invoice_number") or "—"]
+                                      for m in moves["movements"][:20]]})
+    else:
+        reply.say("No stock movement was recorded for this item in the 14 days before the count.")
     drafts = T.call(trace, "unposted_documents", item_id=intent.item_id)
     findings = []
     if line["ledger_changed"]:

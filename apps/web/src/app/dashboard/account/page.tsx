@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { LogOut, Palette, ShieldCheck } from "lucide-react";
 
 import { api } from "@/lib/api/client";
 import { LOGOUT_ALL_ENDPOINT } from "@/lib/api/endpoints";
@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
+import ThemePicker from "@/components/ui/ThemePicker";
 import { useToast } from "@/components/ui/Toast";
 
 /** Stage 10: the signed-in person's own account and sessions. */
@@ -35,8 +36,8 @@ export default function AccountPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={ShieldCheck} eyebrow="Administration" title="Account Security"
-        description="Your account and where you are signed in." />
+      <PageHeader icon={ShieldCheck} eyebrow="Administration" title="Account & Appearance"
+        description="Your account, where you are signed in, and how Kitchen Copilot looks on this device." />
       <Card className="max-w-2xl">
         <CardHeader title={user?.full_name ?? "Your account"} subtitle={user ? `${user.email} · ${formatRole(user.role)}` : undefined} />
         <div className="space-y-4 border-t border-slate-100 px-5 py-4 text-sm text-slate-600">
@@ -44,6 +45,10 @@ export default function AccountPage() {
           <p>To change your password, sign out and use <span className="font-medium">Forgot password</span> on the sign-in page.</p>
           <Button variant="danger" icon={<LogOut size={16} />} onClick={() => setConfirming(true)}>Sign out everywhere</Button>
         </div>
+      </Card>
+      <Card>
+        <CardHeader title="Appearance" subtitle="Colour theme for this browser. Your data and permissions are not affected." icon={Palette} iconTone="brand" />
+        <div className="p-5 sm:p-6"><ThemePicker /></div>
       </Card>
       <ConfirmDialog open={confirming} tone="warning" title="Sign out of every device?"
         description="Every session of your account ends now, including this one." confirmLabel="Sign out everywhere"

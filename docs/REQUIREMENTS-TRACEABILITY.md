@@ -1145,6 +1145,11 @@ STAFF grants, permissions and ledger triggers unchanged). Evidence:
 `services/api/tests/test_stage10_12.py`, full backend suite 767 passed,
 migration round trip 14 of 14 (`docs/STAGE-10-12-NOTES.md`).
 
+27 November 2026: Kitchen Copilot reviewed on a throwaway copy of the
+development data (all three workflows, approval, rejection, duplicate
+decisions, STAFF refusal); eight defects fixed and covered by tests
+(`docs/STAGE-10-12-NOTES.md`, "Review on realistic data").
+
 ## 8. Acceptance Tests
 
 | ID | Acceptance scenario | Status |

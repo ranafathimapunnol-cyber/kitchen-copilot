@@ -40,7 +40,7 @@ import SearchInput from "@/components/ui/SearchInput";
 import SearchSelect from "@/components/ui/SearchSelect";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/States";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
+import { SortableTH, Table, TBody, TD, TH, THead, TR, compareCells, type SortState } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/components/ui/cn";
 import type { ColumnConfig, FieldConfig, ResourceConfig } from "@/types";
@@ -171,6 +171,7 @@ export default function ResourcePage({
   const [status, setStatus] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+  const [sort, setSort] = useState<SortState>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
@@ -287,9 +288,18 @@ export default function ResourcePage({
       .includes(needle);
   });
 
+  // Sorting covers every loaded record, not only the page on screen.
+  const sortColumn = sort ? config.columns.find((c) => c.key === sort.key) : undefined;
+  const ordered = sortColumn
+    ? [...filtered].sort((a, b) => {
+        const order = compareCells(getColumnValue(a, sortColumn), getColumnValue(b, sortColumn), isNumericColumn(sortColumn));
+        return sort?.direction === "desc" ? -order : order;
+      })
+    : filtered;
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const pageRows = filtered.slice(
+  const pageRows = ordered.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -691,6 +701,26 @@ export default function ResourcePage({
             className="w-full sm:max-w-xs"
           />
 
+          {/* Phones show cards, so sorting gets its own control there. */}
+          <label className="flex items-center gap-2 text-xs text-slate-500 md:hidden">
+            <span className="shrink-0">Sort by</span>
+            <SelectInput
+              aria-label="Sort by"
+              value={sort ? `${sort.key}:${sort.direction}` : ""}
+              onChange={(event) => {
+                const [key, direction] = event.target.value.split(":");
+                setSort(key ? { key, direction: direction as "asc" | "desc" } : null);
+              }}
+              className="h-9 text-sm"
+            >
+              <option value="">Default order</option>
+              {config.columns.flatMap((column) => [
+                <option key={`${column.key}:asc`} value={`${column.key}:asc`}>{column.label} ↑</option>,
+                <option key={`${column.key}:desc`} value={`${column.key}:desc`}>{column.label} ↓</option>,
+              ])}
+            </SelectInput>
+          </label>
+
           {hasStatus && (
             <SegmentedControl
               label="Filter by status"
@@ -768,13 +798,16 @@ export default function ResourcePage({
                 <THead>
                   <tr>
                     {config.columns.map((column) => (
-                      <TH
+                      <SortableTH
                         key={column.key}
+                        sortKey={column.key}
+                        sort={sort}
+                        onSort={setSort}
                         align={isNumericColumn(column) ? "right" : "left"}
                         className={column.key === "id" ? "w-20" : undefined}
                       >
                         {column.label}
-                      </TH>
+                      </SortableTH>
                     ))}
                     {hasStatus && <TH className="w-28">Status</TH>}
                     {showActions && (

@@ -71,7 +71,7 @@ export default function Sidebar({
       id="app-sidebar"
       aria-label="Main navigation"
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col border-r border-slate-200/70 bg-[#faf6ee] transition-[transform,visibility,width] duration-300 ease-out lg:visible lg:translate-x-0 print:hidden",
+        "fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col border-r border-slate-200/70 bg-sidebar transition-[transform,visibility,width] duration-300 ease-out lg:visible lg:translate-x-0 print:hidden",
         collapsed ? "lg:w-[76px]" : "lg:w-[17rem]",
         mobileOpen
           ? "visible translate-x-0 shadow-overlay"

@@ -17,6 +17,11 @@
 @theme {
   --color-white: #fffcf6;
   --color-sand: #e8ddca;
+  --color-sidebar: #faf6ee;
+  --color-chart-1: #8b6f50;
+  --color-chart-2: #4f7088;
+  --color-chart-grid: #ebe2d3;
+  --color-chart-axis: #d5c7b1;
   --color-ivory: #f5f0e6;
 
   --color-slate-50: #f5f0e6;
@@ -120,10 +125,171 @@
   }
 }
 
+
+/*
+ * Colour themes. The person picks one (top bar → account menu, or Account
+ * Security → Appearance); it is stored in this browser only. Each theme
+ * redefines the same tokens, so every screen follows. Contrast of text,
+ * secondary text, primary buttons, brand text and chart marks was checked
+ * for each theme (WCAG AA 4.5:1 for text, 3:1 for chart marks).
+ */
+/* Harbor — porcelain and navy */
+:root[data-theme="harbor"] {
+  --color-white: #fbfcfd;
+  --color-sand: #dde4ec;
+  --color-sidebar: #f5f7f9;
+  --color-slate-50: #eef1f4;
+  --color-slate-100: #e3e7eb;
+  --color-slate-200: #d7dbdf;
+  --color-slate-300: #c2c7cd;
+  --color-slate-400: #949ba3;
+  --color-slate-500: #5e6771;
+  --color-slate-600: #4e5863;
+  --color-slate-700: #3a444f;
+  --color-slate-800: #2b3642;
+  --color-slate-900: #1f2a36;
+  --color-slate-950: #111921;
+  --color-brand-50: #edf1f4;
+  --color-brand-100: #dde4eb;
+  --color-brand-200: #bfccd8;
+  --color-brand-300: #99adc0;
+  --color-brand-400: #708ca6;
+  --color-brand-500: #547694;
+  --color-brand-600: #3d6385;
+  --color-brand-700: #34516c;
+  --color-brand-800: #2e465c;
+  --color-brand-900: #283a4c;
+  --color-chart-1: #3d6385;
+  --color-chart-2: #a0703f;
+  --color-chart-grid: #d7dbdf;
+  --color-chart-axis: #c2c7cd;
+}
+
+/* Sage — mist and eucalyptus */
+:root[data-theme="sage"] {
+  --color-white: #fbfdfb;
+  --color-sand: #dce6df;
+  --color-sidebar: #f5f8f5;
+  --color-slate-50: #eef2ee;
+  --color-slate-100: #e4e8e4;
+  --color-slate-200: #d7ddd8;
+  --color-slate-300: #c3c9c5;
+  --color-slate-400: #969e99;
+  --color-slate-500: #5d6862;
+  --color-slate-600: #515d57;
+  --color-slate-700: #3d4943;
+  --color-slate-800: #2e3c36;
+  --color-slate-900: #22302a;
+  --color-slate-950: #131d19;
+  --color-brand-50: #eef3f0;
+  --color-brand-100: #e0e8e3;
+  --color-brand-200: #c5d2cc;
+  --color-brand-300: #a2b7ae;
+  --color-brand-400: #7d998d;
+  --color-brand-500: #648678;
+  --color-brand-600: #4f7566;
+  --color-brand-700: #415f53;
+  --color-brand-800: #385147;
+  --color-brand-900: #2f443b;
+  --color-chart-1: #4f7566;
+  --color-chart-2: #8a6a3f;
+  --color-chart-grid: #d7ddd8;
+  --color-chart-axis: #c3c9c5;
+}
+
+/* Plum — blush and aubergine */
+:root[data-theme="plum"] {
+  --color-white: #fffbfc;
+  --color-sand: #eadde2;
+  --color-sidebar: #faf6f7;
+  --color-slate-50: #f5eff1;
+  --color-slate-100: #ebe5e7;
+  --color-slate-200: #e0d8dc;
+  --color-slate-300: #cdc4c9;
+  --color-slate-400: #a3979e;
+  --color-slate-500: #71636c;
+  --color-slate-600: #62545d;
+  --color-slate-700: #4f3f49;
+  --color-slate-800: #41313c;
+  --color-slate-900: #352530;
+  --color-slate-950: #21161d;
+  --color-brand-50: #f6eef1;
+  --color-brand-100: #ebdfe6;
+  --color-brand-200: #d7c5cf;
+  --color-brand-300: #bca2b3;
+  --color-brand-400: #9f7c94;
+  --color-brand-500: #8c647f;
+  --color-brand-600: #7b4f6e;
+  --color-brand-700: #65425b;
+  --color-brand-800: #57394e;
+  --color-brand-900: #493142;
+  --color-chart-1: #7b4f6e;
+  --color-chart-2: #4f7088;
+  --color-chart-grid: #e0d8dc;
+  --color-chart-axis: #cdc4c9;
+}
+
+/* Espresso — dark */
+:root[data-theme="espresso"] {
+  --color-white: #1e1915;
+  --color-sand: #302a26;
+  --color-sidebar: #191511;
+  --color-slate-50: #15110e;
+  --color-slate-100: #201b18;
+  --color-slate-200: #2b2622;
+  --color-slate-300: #3a3531;
+  --color-slate-400: #5f5a54;
+  --color-slate-500: #958f87;
+  --color-slate-600: #b2aba2;
+  --color-slate-700: #cac2b9;
+  --color-slate-800: #ded6cc;
+  --color-slate-900: #f2eadf;
+  --color-slate-950: #fbf7f1;
+  --color-brand-50: #2d251e;
+  --color-brand-100: #392f26;
+  --color-brand-200: #4f4133;
+  --color-brand-300: #6d5a46;
+  --color-brand-400: #94795d;
+  --color-brand-500: #b2916f;
+  --color-brand-600: #c9a47d;
+  --color-brand-700: #dcc3a9;
+  --color-brand-800: #e4d1bc;
+  --color-brand-900: #eadccb;
+  --color-chart-1: #c9a47d;
+  --color-chart-2: #7fa3bd;
+  --color-chart-grid: #2b2622;
+  --color-chart-axis: #3a3531;
+  --color-accent-50: #1f2a33;
+  --color-accent-500: #7fa3bd;
+  --color-emerald-50: #17261d;
+  --color-emerald-100: #1d3324;
+  --color-emerald-200: #2a4a35;
+  --color-emerald-500: #5fae7d;
+  --color-emerald-600: #6fbf8c;
+  --color-emerald-700: #8fd1a6;
+  --color-emerald-800: #b3e2c3;
+  --color-amber-50: #2a2112;
+  --color-amber-100: #3a2d15;
+  --color-amber-200: #574220;
+  --color-amber-500: #d6a24a;
+  --color-amber-600: #e0b261;
+  --color-amber-700: #ecc887;
+  --color-amber-800: #f3d9a8;
+  --color-amber-900: #f7e5c2;
+  --color-red-50: #2e1814;
+  --color-red-100: #40201a;
+  --color-red-200: #5e2e25;
+  --color-red-500: #e07a63;
+  --color-red-600: #e88d78;
+  --color-red-700: #f0a895;
+  --color-red-800: #f5c2b5;
+  color-scheme: dark;
+}
+
 :root {
   color-scheme: light;
-  --background: #f5f0e6;
-  --foreground: #382d25;
+  --background: var(--color-slate-50);
+  --foreground: var(--color-slate-900);
 }
 
 * {
@@ -179,7 +345,7 @@ h3 {
 /* Thin, warm scrollbars for the sidebar and scrolling tables. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d5c7b1 transparent;
+  scrollbar-color: var(--color-slate-300) transparent;
 }
 
 /* One visible focus treatment for every interactive element. */
@@ -202,7 +368,7 @@ textarea:focus-visible {
 
 /* Native <dialog> backdrop for Modal. */
 dialog::backdrop {
-  background: rgb(38 30 24 / 0.42);
+  background: rgb(20 15 12 / 0.5);
   backdrop-filter: blur(2px);
 }
 

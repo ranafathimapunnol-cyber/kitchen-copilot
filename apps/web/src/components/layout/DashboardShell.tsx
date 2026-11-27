@@ -12,15 +12,18 @@ import {
   Loader2,
   LogOut,
   Menu,
+  Search,
   ShieldCheck,
 } from "lucide-react";
 
+import CommandPalette from "./CommandPalette";
 import Sidebar from "./Sidebar";
 import { CurrentUserContext } from "./CurrentUser";
 import {
   AuthorizationProvider,
   useAuthorization,
 } from "./AuthorizationContext";
+import ThemePicker from "@/components/ui/ThemePicker";
 import { ToastProvider } from "@/components/ui/Toast";
 import { cn } from "@/components/ui/cn";
 import { useAuth } from "@/hooks/useAuth";
@@ -199,6 +202,10 @@ function AccountMenu({ user, onLogout }: { user: User; onLogout: () => Promise<v
               {formatRole(user.role)}
             </span>
           </div>
+          <div className="border-b border-slate-100 px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">Theme</p>
+            <ThemePicker compact />
+          </div>
           <div className="p-1.5">
             <Link
               href="/dashboard/account"
@@ -238,6 +245,7 @@ function DashboardWorkspace({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const { permissions, loading: permissionsLoading } = useAuthorization();
 
@@ -320,9 +328,11 @@ function DashboardWorkspace({
           aria-label="Close navigation"
           tabIndex={-1}
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 animate-fade-in bg-slate-950/35 backdrop-blur-[2px] lg:hidden print:hidden"
+          className="fixed inset-0 z-40 animate-fade-in bg-black/40 backdrop-blur-[2px] lg:hidden print:hidden"
         />
       )}
+
+      <CommandPalette role={user.role} permissions={permissions} open={paletteOpen} onOpenChange={setPaletteOpen} />
 
       <Sidebar
         role={user.role}
@@ -383,7 +393,18 @@ function DashboardWorkspace({
           </div>
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <p className="mr-1 hidden items-center gap-2 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 xl:flex">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search screens and actions"
+              aria-keyshortcuts="Meta+K Control+K"
+              className="flex h-10 items-center gap-2 rounded-xl text-slate-600 transition-colors hover:bg-sand/50 hover:text-slate-900 max-md:w-10 max-md:justify-center md:mr-1 md:w-56 md:border md:border-slate-200/80 md:bg-white md:px-3 md:text-sm md:text-slate-500 md:hover:bg-white md:hover:border-brand-200 lg:w-64"
+            >
+              <Search size={17} aria-hidden className="shrink-0" />
+              <span className="hidden flex-1 text-left md:inline">Search or jump to…</span>
+              <kbd className="hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 text-[11px] leading-5 text-slate-500 md:inline">⌘K</kbd>
+            </button>
+            <p className="mr-1 hidden items-center gap-2 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 2xl:flex">
               <CalendarDays size={13} aria-hidden className="text-brand-600" />
               {today}
             </p>

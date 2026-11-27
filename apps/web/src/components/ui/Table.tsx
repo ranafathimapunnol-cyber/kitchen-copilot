@@ -113,3 +113,66 @@ export function TD({
     </td>
   );
 }
+
+export type SortState = { key: string; direction: "asc" | "desc" } | null;
+
+/**
+ * A column header that sorts: first click ascending, second descending,
+ * third back to the original order. Announces the order with aria-sort.
+ */
+export function SortableTH({
+  children,
+  sortKey,
+  sort,
+  onSort,
+  align = "left",
+  className,
+}: {
+  children: ReactNode;
+  sortKey: string;
+  sort: SortState;
+  onSort: (next: SortState) => void;
+  align?: Align;
+  className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  const direction = active ? sort.direction : null;
+  const next: SortState = !active ? { key: sortKey, direction: "asc" }
+    : direction === "asc" ? { key: sortKey, direction: "desc" } : null;
+
+  return (
+    <TH
+      align={align}
+      className={className}
+      aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(next)}
+        className={cn(
+          "group/sort inline-flex items-center gap-1 rounded uppercase transition-colors hover:text-slate-800",
+          active && "text-slate-800",
+          align === "right" && "flex-row-reverse"
+        )}
+      >
+        {children}
+        <span aria-hidden className={cn("text-[10px] leading-none", active ? "text-brand-700" : "text-slate-300 group-hover/sort:text-slate-400")}>
+          {direction === "desc" ? "▼" : direction === "asc" ? "▲" : "↕"}
+        </span>
+      </button>
+    </TH>
+  );
+}
+
+/** Compares two cell texts: numbers numerically, text by locale; "—" last. */
+export function compareCells(a: string, b: string, numeric: boolean): number {
+  const blankA = a === "—" || a === "";
+  const blankB = b === "—" || b === "";
+  if (blankA || blankB) return blankA === blankB ? 0 : blankA ? 1 : -1;
+  if (numeric) {
+    const x = Number(a.replace(/[^0-9.-]/g, ""));
+    const y = Number(b.replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(x) && Number.isFinite(y)) return x - y;
+  }
+  return a.localeCompare(b, "en-IN", { numeric: true, sensitivity: "base" });
+}

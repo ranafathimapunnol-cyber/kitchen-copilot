@@ -55,7 +55,7 @@ export default function StatCard({
 
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-          style={{ background: `${accent}14`, color: accent }}
+          style={{ background: `color-mix(in srgb, ${accent} 9%, transparent)`, color: accent }}
         >
           <Icon size={16} aria-hidden />
         </div>

@@ -33,8 +33,29 @@ API (`services/api/.env` or the host's secret store):
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Optional external model for reading requests only |
 | `AGENT_PROCEDURES_DIR` | Folder of approved procedure documents (Markdown) |
 | `AGENT_PROPOSAL_TTL_HOURS` | Pending proposals expire after this (default 72) |
+| `COOKIE_SECURE`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN` | Sign-in cookies. **Set `COOKIE_SECURE=true` in production** (HTTPS only); the default `false` is for local development over http |
 
 Web: `NEXT_PUBLIC_API_BASE_URL` at build time.
+
+### Client addresses behind the reverse proxy (required before release)
+
+Sign-in throttling (Q19 interim rule: 30 failures per IP address in 15
+minutes) and the password-reset limits count by the client's IP address.
+Behind nginx the API sees nginx's address for every user unless:
+
+1. nginx forwards the client address — in `infra/nginx/default.conf`, in
+   each `location`: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`
+   and `proxy_set_header X-Forwarded-Proto $scheme;`; and
+2. uvicorn trusts those headers **only from nginx** —
+   `--proxy-headers --forwarded-allow-ips=<nginx address>` (or the
+   `FORWARDED_ALLOW_IPS` environment variable), and the API port is not
+   published to the internet (only nginx reaches it).
+
+Without step 1 and 2, 30 mistyped passwords anywhere on the campus would
+make every sign-in wait 15 minutes. Trusting the headers from any address
+(`*`) while the API port is reachable would let anyone bypass the limits.
+Not changed in this repository: it depends on the hosting decision
+(Q17/Q18) and needs approval as a deployment change.
 
 ## 3. Release checklist
 
@@ -47,11 +68,14 @@ Web: `NEXT_PUBLIC_API_BASE_URL` at build time.
    compare every table) before the real apply.
 6. Apply migrations once: `alembic upgrade head` (the API image runs this on
    start in `compose.yaml`; on a shared server run it once by hand first).
-7. Smoke test as each role (ADMIN, KITCHEN_MANAGER, STAFF; SUPER_ADMIN only
+7. Check the two production settings above: `COOKIE_SECURE=true`, and
+   the proxy client-address set-up (sign in with a wrong password from two
+   devices and confirm the API log shows two different client addresses).
+8. Smoke test as each role (ADMIN, KITCHEN_MANAGER, STAFF; SUPER_ADMIN only
    once migration `d5e8f0b2a314` is applied):
    sign in, dashboard, one list per module, one report export, Copilot
    status.
-8. Record the release (version, migration head, test counts) in
+9. Record the release (version, migration head, test counts) in
    `docs/REMAINING-WORK.md`. Mark nothing ACCEPTED without the client.
 
 ## 4. Backup and restore
@@ -79,7 +103,10 @@ the dump. Never disable them to "fix" data: post a reversal.
 
 1. Set `AGENT_ENABLED=true` and restart the API.
 2. Without `GEMINI_API_KEY` the agent reads requests with its built-in
-   rules (no network). With a key, the model receives only the request text,
+   rules (no network). **External LLM use is not approved yet** (client
+   question §8.4): leave `GEMINI_API_KEY` unset or empty. The development
+   `.env` contains a key; on the development server the Copilot is run with
+   `GEMINI_API_KEY=` overriding it, so nothing is sent to Google. With a key, the model receives only the request text,
    today's date and the campus's meal session, menu and item names — never
    amounts, stock, suppliers or people — and every figure still comes from
    the application.

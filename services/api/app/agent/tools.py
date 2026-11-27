@@ -181,9 +181,10 @@ def procedures(db: Session, user: User, topic: str) -> dict:
 
 @tool("spending_comparison", "Spending of a period against the comparison period, with weighted average "
       "prices and the price and quantity effects (DASH01-DASH04 calculations).", ("purchase_bill.read",))
-def spending_comparison(db: Session, user: User, date_from: date, date_to: date, compare: str) -> dict:
+def spending_comparison(db: Session, user: User, date_from: date, date_to: date, compare: str,
+                        category_id: int | None = None, item_id: int | None = None) -> dict:
     from app.api.routes.analytics import build_spending
-    return build_spending(db, user, date_from, date_to, compare, None, None, None)
+    return build_spending(db, user, date_from, date_to, compare, None, category_id, item_id)
 
 
 @tool("headcount_summary", "Average daily headcount from meal records for two periods.", ("meal.read",))

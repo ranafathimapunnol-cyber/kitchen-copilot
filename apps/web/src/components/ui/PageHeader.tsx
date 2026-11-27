@@ -1,4 +1,10 @@
+"use client";
+
 import type { ElementType, ReactNode } from "react";
+import { usePathname } from "next/navigation";
+
+import { useAuthorization } from "@/components/layout/AuthorizationContext";
+import ModuleInsights from "@/components/layout/ModuleInsights";
 
 type Props = {
   title: string;
@@ -20,7 +26,11 @@ export default function PageHeader({
   actions,
   meta,
 }: Props) {
+  const pathname = usePathname();
+  const { role, permissions } = useAuthorization();
+
   return (
+    <>
     <header className="flex flex-col gap-4 pb-1 sm:flex-row sm:items-end sm:justify-between">
       <div className="flex min-w-0 items-start gap-4">
         {Icon && (
@@ -58,5 +68,8 @@ export default function PageHeader({
         </div>
       )}
     </header>
+    {/* A module's list screens show its live figures under the title. */}
+    <ModuleInsights pathname={pathname} role={role} permissions={permissions} />
+    </>
   );
 }
