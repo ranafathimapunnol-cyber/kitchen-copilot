@@ -9,7 +9,6 @@ import {
   CalendarRange,
   BarChart3,
   Bot,
-  Building2,
   ScrollText,
   ShieldCheck,
   UserCog,
@@ -62,11 +61,6 @@ export const NAV_GROUPS: NavGroup[] = [
       // Stage 12: the agent (every campus user; jobs check permissions).
       { label: "Kitchen Copilot", href: "/dashboard/copilot", icon: Bot },
     ],
-  },
-  {
-    // Stage 11: SUPER_ADMIN only.
-    label: "Platform",
-    items: [{ label: "Organisations & Campuses", href: "/dashboard/platform", icon: Building2 }],
   },
   {
     label: "Inventory",

@@ -27,7 +27,7 @@ from app.models.user import User, UserRole
 router = APIRouter(prefix="/api/agent", tags=["Kitchen Copilot"])
 MESSAGES_PER_10_MIN = 30
 WORKFLOW_TOOLS = {"plan_procure": "meal_options", "explain_spending": "spending_comparison",
-                  "stock_difference": "latest_count_line"}
+                  "stock_difference": "latest_count_line", "attention": "operations_overview"}
 
 
 def campus_user(user: User = Depends(get_current_user)) -> User:
@@ -45,6 +45,8 @@ def enabled_user(user: User = Depends(campus_user)) -> User:
 class MessageInput(BaseModel):
     text: str = Field(min_length=2, max_length=1000)
     conversation_id: int | None = Field(default=None, gt=0)
+    # The screen the person is viewing; focuses answers, grants nothing.
+    page: str | None = Field(default=None, max_length=120, pattern=r"^/dashboard(/[a-z0-9-]+){0,4}$")
 
 
 class Decision(BaseModel):
@@ -145,9 +147,11 @@ def send_message(payload: MessageInput, db: Session = Depends(get_db), user: Use
     question = AgentMessage(conversation_id=conversation.id, campus_id=user.campus_id, role="user", content=text, payload={})
     db.add(question)
     db.flush()
-    reply, trace = engine.run_turn(db, user, conversation.id, text, earlier)
+    reply, trace = engine.run_turn(db, user, conversation.id, text, earlier, payload.page)
+    # The tool calls of this turn, for the "checked …" status line.
+    tools = [{"name": s.name, "ok": s.ok, "ms": s.duration_ms} for s in trace.steps if s.kind == "tool"]
     answer = AgentMessage(conversation_id=conversation.id, campus_id=user.campus_id, role="assistant",
-                          content="\n\n".join(reply.text), payload=reply.payload())
+                          content="\n\n".join(reply.text), payload={**reply.payload(), "tools": tools})
     db.add(answer)
     db.flush()
     for step in trace.steps:
@@ -156,7 +160,7 @@ def send_message(payload: MessageInput, db: Session = Depends(get_db), user: Use
         p.message_id = answer.id
     conversation.updated_at = datetime.now(timezone.utc)
     record_audit(db, user, "ASK", "AGENT_CONVERSATION", conversation.id, {
-        "message_id": answer.id, "workflow": reply.intent.workflow, "status": reply.status,
+        "message_id": answer.id, "workflow": reply.intent.workflow, "page": payload.page, "status": reply.status,
         "reader": reply.intent.reader, "tools": [s.name for s in trace.steps if s.kind == "tool"],
         "proposals": [p.id for p in reply.proposals]})
     db.commit()

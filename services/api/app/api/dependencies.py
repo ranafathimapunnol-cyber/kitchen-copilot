@@ -200,6 +200,11 @@ def get_current_user(
     if not user or not user.is_active:
         raise credentials_error
 
+    # Stage 11: platform accounts never hold a campus session; they use the
+    # separate platform sign-in (app/api/platform_auth.py).
+    if user.role == UserRole.SUPER_ADMIN or user.campus_id is None:
+        raise credentials_error
+
     # The token must carry the fingerprint of the current password. After
     # a password reset it no longer matches, so every session issued before
     # the reset is rejected.
@@ -211,7 +216,23 @@ def get_current_user(
     if session_revoked(user, payload):
         raise credentials_error
 
+    # Stage 11: a deactivated campus keeps all its records, but its users
+    # cannot use the application until the campus is activated again.
+    if not campus_is_active(db, user.campus_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CAMPUS_INACTIVE_MESSAGE)
+
     return user
+
+
+CAMPUS_INACTIVE_MESSAGE = ("This campus has been deactivated. Its records are kept; "
+                           "contact your organisation's platform administrator.")
+
+
+def campus_is_active(db: Session, campus_id: int | None) -> bool:
+    from app.models.campus import Campus
+
+    active = db.query(Campus.is_active).filter(Campus.id == campus_id).scalar()
+    return active is not False
 
 
 def session_revoked(user: User, payload: dict) -> bool:

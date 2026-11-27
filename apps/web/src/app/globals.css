@@ -1,105 +1,108 @@
 @import "tailwindcss";
 
 /*
- * Kitchen Copilot design tokens — warm ivory theme.
+ * KITCHEN COPILOT — BOLD MINIMAL DESIGN SYSTEM
  *
- * The whole application is themed here. Pages use the standard Tailwind
- * names (slate, white, brand, emerald, amber, red); this block redefines
- * them, so every screen follows one palette:
- *   ivory   #F5F0E6  page background        (slate-50)
- *   cream   #FFFCF6  cards and panels       (white)
- *   sand    #E8DDCA  secondary surfaces     (sand)
- *   coffee  #8B6F50  primary actions        (brand-600; cream text 4.57:1)
- *   espresso#382D25  main text              (slate-900)
- *   warm grey #736659 secondary text        (slate-500; 4.9:1 on ivory)
- * Green, amber and red are muted and reserved for statuses.
+ * Light: #F0F0EB
+ * Dark:  #171A18
+ * Accent: #D9F18D
+ *
+ * Existing Tailwind semantic names are preserved so existing pages,
+ * forms, tables and components continue to use the same class names.
  */
+
 @theme {
-  --color-white: #fffcf6;
-  --color-sand: #e8ddca;
-  --color-sidebar: #faf6ee;
-  --color-chart-1: #8b6f50;
-  --color-chart-2: #4f7088;
-  --color-chart-grid: #ebe2d3;
-  --color-chart-axis: #d5c7b1;
-  --color-ivory: #f5f0e6;
+  /* Surfaces */
+  --color-white: #fafaf7;
+  --color-sand: #e5e7df;
+  --color-sidebar: #e9eae3;
+  --color-ivory: #f0f0eb;
 
-  --color-slate-50: #f5f0e6;
-  --color-slate-100: #efe7d9;
-  --color-slate-200: #e5dac8;
-  --color-slate-300: #d5c7b1;
-  --color-slate-400: #a99b88;
-  --color-slate-500: #736659;
-  --color-slate-600: #5f5246;
-  --color-slate-700: #4a3e35;
-  --color-slate-800: #3f342b;
-  --color-slate-900: #382d25;
-  --color-slate-950: #261e18;
+  /* Charts */
+  --color-chart-1: #718a3c;
+  --color-chart-2: #647b78;
+  --color-chart-grid: #dfe1d8;
+  --color-chart-axis: #bfc3b7;
 
-  --color-brand-50: #f7f0e6;
-  --color-brand-100: #eee1cf;
-  --color-brand-200: #dfcaae;
-  --color-brand-300: #c8ab88;
-  --color-brand-400: #a98b69;
-  --color-brand-500: #9a7c5b;
-  --color-brand-600: #8b6f50;
-  --color-brand-700: #6f5940;
-  --color-brand-800: #564431;
-  --color-brand-900: #3f3124;
+  /* Neutral scale */
+  --color-slate-50: #f0f0eb;
+  --color-slate-100: #e7e8e1;
+  --color-slate-200: #d8dad1;
+  --color-slate-300: #c1c4b9;
+  --color-slate-400: #92978a;
+  --color-slate-500: #686e63;
+  --color-slate-600: #50564d;
+  --color-slate-700: #383e37;
+  --color-slate-800: #292f2a;
+  --color-slate-900: #202522;
+  --color-slate-950: #141916;
 
-  --color-accent-50: #eef2f5;
-  --color-accent-500: #4f7088;
+  /* Lime accent */
+  --color-brand-50: #f5f9e9;
+  --color-brand-100: #eaf2d1;
+  --color-brand-200: #d9f18d;
+  --color-brand-300: #c8e66f;
+  --color-brand-400: #b2d64e;
+  --color-brand-500: #93b638;
+  --color-brand-600: #718f2c;
+  --color-brand-700: #536d24;
+  --color-brand-800: #3c501e;
+  --color-brand-900: #293918;
 
-  --color-emerald-50: #eef4ec;
-  --color-emerald-100: #dce9d8;
-  --color-emerald-200: #c3d9be;
-  --color-emerald-500: #5e9470;
-  --color-emerald-600: #47805a;
-  --color-emerald-700: #33694a;
-  --color-emerald-800: #2a573d;
+  /* Supporting accent */
+  --color-accent-50: #edf2ef;
+  --color-accent-500: #647b78;
 
-  --color-amber-50: #fbf3e2;
-  --color-amber-100: #f5e6c4;
-  --color-amber-200: #ecd39f;
-  --color-amber-500: #c48a2c;
-  --color-amber-600: #a8741c;
-  --color-amber-700: #85590f;
-  --color-amber-800: #6c480c;
-  --color-amber-900: #573a0a;
+  /* Success */
+  --color-emerald-50: #edf5ed;
+  --color-emerald-100: #dcebdc;
+  --color-emerald-200: #c1ddc2;
+  --color-emerald-500: #4e9661;
+  --color-emerald-600: #367c4b;
+  --color-emerald-700: #28623a;
+  --color-emerald-800: #204d30;
 
-  --color-red-50: #fbede8;
-  --color-red-100: #f5dad1;
-  --color-red-200: #ebc0b3;
-  --color-red-500: #c25a44;
-  --color-red-600: #a8432f;
-  --color-red-700: #8f3726;
-  --color-red-800: #742c1f;
+  /* Warning */
+  --color-amber-50: #fbf4e6;
+  --color-amber-100: #f5e8c8;
+  --color-amber-200: #ead5a1;
+  --color-amber-500: #c18b2e;
+  --color-amber-600: #a16e1e;
+  --color-amber-700: #805316;
+  --color-amber-800: #684314;
+  --color-amber-900: #513510;
 
+  /* Danger */
+  --color-red-50: #f9eeeb;
+  --color-red-100: #f1dcd6;
+  --color-red-200: #e7c0b7;
+  --color-red-500: #c45c4b;
+  --color-red-600: #a94436;
+  --color-red-700: #88372d;
+  --color-red-800: #6e2d26;
+
+  /* Typography */
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
 
+  /* Shape and depth */
   --radius-xl: 0.875rem;
   --radius-2xl: 1.125rem;
 
-  --shadow-xs: 0 1px 1px 0 rgb(56 45 37 / 0.04);
-  --shadow-sm: 0 1px 2px 0 rgb(56 45 37 / 0.06);
-  --shadow-card: 0 1px 2px 0 rgb(56 45 37 / 0.04),
-    0 4px 14px -6px rgb(56 45 37 / 0.07);
-  --shadow-raised: 0 10px 28px -12px rgb(56 45 37 / 0.18),
-    0 2px 6px -2px rgb(56 45 37 / 0.06);
-  --shadow-overlay: 0 30px 60px -18px rgb(38 30 24 / 0.35);
+  --shadow-xs: 0 1px 1px rgb(32 37 34 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(32 37 34 / 0.06);
+  --shadow-card: 0 1px 2px rgb(32 37 34 / 0.04),
+    0 8px 24px -12px rgb(32 37 34 / 0.12);
+  --shadow-raised: 0 12px 32px -14px rgb(32 37 34 / 0.2);
+  --shadow-overlay: 0 30px 60px -18px rgb(20 25 22 / 0.35);
 
   --animate-fade-in: fade-in 150ms ease-out;
   --animate-pop-in: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up: slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   @keyframes pop-in {
@@ -125,165 +128,70 @@
   }
 }
 
-
-/*
- * Colour themes. The person picks one (top bar → account menu, or Account
- * Security → Appearance); it is stored in this browser only. Each theme
- * redefines the same tokens, so every screen follows. Contrast of text,
- * secondary text, primary buttons, brand text and chart marks was checked
- * for each theme (WCAG AA 4.5:1 for text, 3:1 for chart marks).
- */
-/* Harbor — porcelain and navy */
-:root[data-theme="harbor"] {
-  --color-white: #fbfcfd;
-  --color-sand: #dde4ec;
-  --color-sidebar: #f5f7f9;
-  --color-slate-50: #eef1f4;
-  --color-slate-100: #e3e7eb;
-  --color-slate-200: #d7dbdf;
-  --color-slate-300: #c2c7cd;
-  --color-slate-400: #949ba3;
-  --color-slate-500: #5e6771;
-  --color-slate-600: #4e5863;
-  --color-slate-700: #3a444f;
-  --color-slate-800: #2b3642;
-  --color-slate-900: #1f2a36;
-  --color-slate-950: #111921;
-  --color-brand-50: #edf1f4;
-  --color-brand-100: #dde4eb;
-  --color-brand-200: #bfccd8;
-  --color-brand-300: #99adc0;
-  --color-brand-400: #708ca6;
-  --color-brand-500: #547694;
-  --color-brand-600: #3d6385;
-  --color-brand-700: #34516c;
-  --color-brand-800: #2e465c;
-  --color-brand-900: #283a4c;
-  --color-chart-1: #3d6385;
-  --color-chart-2: #a0703f;
-  --color-chart-grid: #d7dbdf;
-  --color-chart-axis: #c2c7cd;
-}
-
-/* Sage — mist and eucalyptus */
-:root[data-theme="sage"] {
-  --color-white: #fbfdfb;
-  --color-sand: #dce6df;
-  --color-sidebar: #f5f8f5;
-  --color-slate-50: #eef2ee;
-  --color-slate-100: #e4e8e4;
-  --color-slate-200: #d7ddd8;
-  --color-slate-300: #c3c9c5;
-  --color-slate-400: #969e99;
-  --color-slate-500: #5d6862;
-  --color-slate-600: #515d57;
-  --color-slate-700: #3d4943;
-  --color-slate-800: #2e3c36;
-  --color-slate-900: #22302a;
-  --color-slate-950: #131d19;
-  --color-brand-50: #eef3f0;
-  --color-brand-100: #e0e8e3;
-  --color-brand-200: #c5d2cc;
-  --color-brand-300: #a2b7ae;
-  --color-brand-400: #7d998d;
-  --color-brand-500: #648678;
-  --color-brand-600: #4f7566;
-  --color-brand-700: #415f53;
-  --color-brand-800: #385147;
-  --color-brand-900: #2f443b;
-  --color-chart-1: #4f7566;
-  --color-chart-2: #8a6a3f;
-  --color-chart-grid: #d7ddd8;
-  --color-chart-axis: #c3c9c5;
-}
-
-/* Plum — blush and aubergine */
-:root[data-theme="plum"] {
-  --color-white: #fffbfc;
-  --color-sand: #eadde2;
-  --color-sidebar: #faf6f7;
-  --color-slate-50: #f5eff1;
-  --color-slate-100: #ebe5e7;
-  --color-slate-200: #e0d8dc;
-  --color-slate-300: #cdc4c9;
-  --color-slate-400: #a3979e;
-  --color-slate-500: #71636c;
-  --color-slate-600: #62545d;
-  --color-slate-700: #4f3f49;
-  --color-slate-800: #41313c;
-  --color-slate-900: #352530;
-  --color-slate-950: #21161d;
-  --color-brand-50: #f6eef1;
-  --color-brand-100: #ebdfe6;
-  --color-brand-200: #d7c5cf;
-  --color-brand-300: #bca2b3;
-  --color-brand-400: #9f7c94;
-  --color-brand-500: #8c647f;
-  --color-brand-600: #7b4f6e;
-  --color-brand-700: #65425b;
-  --color-brand-800: #57394e;
-  --color-brand-900: #493142;
-  --color-chart-1: #7b4f6e;
-  --color-chart-2: #4f7088;
-  --color-chart-grid: #e0d8dc;
-  --color-chart-axis: #cdc4c9;
-}
-
-/* Espresso — dark */
-:root[data-theme="espresso"] {
-  --color-white: #1e1915;
-  --color-sand: #302a26;
-  --color-sidebar: #191511;
-  --color-slate-50: #15110e;
-  --color-slate-100: #201b18;
-  --color-slate-200: #2b2622;
-  --color-slate-300: #3a3531;
-  --color-slate-400: #5f5a54;
-  --color-slate-500: #958f87;
-  --color-slate-600: #b2aba2;
-  --color-slate-700: #cac2b9;
-  --color-slate-800: #ded6cc;
-  --color-slate-900: #f2eadf;
-  --color-slate-950: #fbf7f1;
-  --color-brand-50: #2d251e;
-  --color-brand-100: #392f26;
-  --color-brand-200: #4f4133;
-  --color-brand-300: #6d5a46;
-  --color-brand-400: #94795d;
-  --color-brand-500: #b2916f;
-  --color-brand-600: #c9a47d;
-  --color-brand-700: #dcc3a9;
-  --color-brand-800: #e4d1bc;
-  --color-brand-900: #eadccb;
-  --color-chart-1: #c9a47d;
-  --color-chart-2: #7fa3bd;
-  --color-chart-grid: #2b2622;
-  --color-chart-axis: #3a3531;
-  --color-accent-50: #1f2a33;
-  --color-accent-500: #7fa3bd;
-  --color-emerald-50: #17261d;
-  --color-emerald-100: #1d3324;
-  --color-emerald-200: #2a4a35;
-  --color-emerald-500: #5fae7d;
-  --color-emerald-600: #6fbf8c;
-  --color-emerald-700: #8fd1a6;
-  --color-emerald-800: #b3e2c3;
-  --color-amber-50: #2a2112;
-  --color-amber-100: #3a2d15;
-  --color-amber-200: #574220;
-  --color-amber-500: #d6a24a;
-  --color-amber-600: #e0b261;
-  --color-amber-700: #ecc887;
-  --color-amber-800: #f3d9a8;
-  --color-amber-900: #f7e5c2;
-  --color-red-50: #2e1814;
-  --color-red-100: #40201a;
-  --color-red-200: #5e2e25;
-  --color-red-500: #e07a63;
-  --color-red-600: #e88d78;
-  --color-red-700: #f0a895;
-  --color-red-800: #f5c2b5;
+/* DARK THEME */
+:root[data-theme="dark"] {
   color-scheme: dark;
+
+  --color-white: #202522;
+  --color-sand: #292f2a;
+  --color-sidebar: #1c211e;
+  --color-ivory: #171a18;
+
+  --color-chart-1: #d9f18d;
+  --color-chart-2: #91aaa1;
+  --color-chart-grid: #303832;
+  --color-chart-axis: #465047;
+
+  --color-slate-50: #171a18;
+  --color-slate-100: #1e2420;
+  --color-slate-200: #29302b;
+  --color-slate-300: #39423b;
+  --color-slate-400: #788278;
+  --color-slate-500: #a0a99f;
+  --color-slate-600: #b6beb5;
+  --color-slate-700: #cbd2ca;
+  --color-slate-800: #dce2da;
+  --color-slate-900: #edf0e9;
+  --color-slate-950: #f8f9f5;
+
+  --color-brand-50: #29351d;
+  --color-brand-100: #354724;
+  --color-brand-200: #526b30;
+  --color-brand-300: #789746;
+  --color-brand-400: #a8cc61;
+  --color-brand-500: #c2e477;
+  --color-brand-600: #d9f18d;
+  --color-brand-700: #e2f6a9;
+  --color-brand-800: #eaf8c5;
+  --color-brand-900: #f2fbdc;
+
+  --color-accent-50: #202c28;
+  --color-accent-500: #91aaa1;
+
+  --color-emerald-50: #1c2d22;
+  --color-emerald-100: #253d2c;
+  --color-emerald-200: #31543b;
+  --color-emerald-500: #70b981;
+  --color-emerald-600: #83c992;
+  --color-emerald-700: #a0d9ab;
+  --color-emerald-800: #bee7c5;
+
+  --color-amber-50: #302716;
+  --color-amber-100: #40351d;
+  --color-amber-200: #5b4927;
+  --color-amber-500: #d5a94e;
+  --color-amber-600: #e0ba69;
+  --color-amber-700: #ebce8d;
+  --color-amber-800: #f1dcae;
+  --color-amber-900: #f6e9cc;
+
+  --color-red-50: #321e1b;
+  --color-red-100: #452823;
+  --color-red-200: #60372f;
+  --color-red-500: #df806e;
+  --color-red-600: #e89584;
+  --color-red-700: #efad9f;
+  --color-red-800: #f5c7bd;
 }
 
 :root {
@@ -335,26 +243,22 @@ h3 {
   text-wrap: balance;
 }
 
-/* Page titles and display figures use the serif display face. */
 .font-display {
   font-family: var(--font-display);
   font-optical-sizing: auto;
   letter-spacing: -0.01em;
 }
 
-/* Thin, warm scrollbars for the sidebar and scrolling tables. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-slate-300) transparent;
 }
 
-/* One visible focus treatment for every interactive element. */
 :focus-visible {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
 }
 
-/* Inputs draw their own ring, so the outline would double it. */
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
@@ -362,14 +266,13 @@ textarea:focus-visible {
 }
 
 ::selection {
-  background: var(--color-brand-100);
-  color: var(--color-brand-800);
+  background: var(--color-brand-200);
+  color: #202522;
 }
 
-/* Native <dialog> backdrop for Modal. */
 dialog::backdrop {
-  background: rgb(20 15 12 / 0.5);
-  backdrop-filter: blur(2px);
+  background: rgb(10 14 11 / 0.58);
+  backdrop-filter: blur(3px);
 }
 
 dialog[open] {
@@ -395,12 +298,11 @@ dialog[open]::backdrop {
   }
 }
 
-/* Printing: shadows print as grey bands, and a table row should not be
-   split across pages. */
 @media print {
   html,
   body {
     background: #fff !important;
+    color: #000 !important;
   }
 
   *,

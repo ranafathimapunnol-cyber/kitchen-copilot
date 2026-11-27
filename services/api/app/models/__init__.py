@@ -137,3 +137,13 @@ __all__ += ["LoginAttempt"]
 from app.models.agent import AgentConversation, AgentMessage, AgentProposal, AgentStep  # noqa: E402
 
 __all__ += ["AgentConversation", "AgentMessage", "AgentStep", "AgentProposal"]
+
+from app.models.organization import Organization  # noqa: E402
+from app.models.platform import (  # noqa: E402
+    CampusIntegration,
+    ErpHeadcountImport,
+    ErpSyncRun,
+    PlatformAuditLog,
+)
+
+__all__ += ["Organization", "PlatformAuditLog", "CampusIntegration", "ErpSyncRun", "ErpHeadcountImport"]

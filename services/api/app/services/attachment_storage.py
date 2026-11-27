@@ -21,6 +21,8 @@ from app.core.config import settings
 
 # campus-<id>/bill-<id>/<32 hex chars>.<ext>
 OBJECT_KEY = re.compile(r"^campus-\d+/bill-\d+/[0-9a-f]{32}\.(pdf|jpg|png|webp)$")
+# campus-<id>/branding/<logo|photo>-<32 hex chars>.<png|jpg> (campus logo and photo)
+BRANDING_KEY = re.compile(r"^campus-\d+/branding/(logo|photo)-[0-9a-f]{32}\.(png|jpg)$")
 
 
 class StorageNotConfigured(RuntimeError):
@@ -45,7 +47,7 @@ class LocalAttachmentStorage:
         self.root = Path(root).expanduser().resolve()
 
     def _path(self, key: str) -> Path:
-        if not OBJECT_KEY.fullmatch(key):
+        if not (OBJECT_KEY.fullmatch(key) or BRANDING_KEY.fullmatch(key)):
             raise ValueError("Invalid attachment key.")
         path = (self.root / key).resolve()
         if self.root not in path.parents:

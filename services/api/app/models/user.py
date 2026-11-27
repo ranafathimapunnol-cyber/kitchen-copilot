@@ -3,16 +3,16 @@ import enum
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, FetchedValue, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 
 class UserRole(str, enum.Enum):
-    # Stage 11 (dormant): the database role type gains SUPER_ADMIN only with
-    # migration M1, which needs its own explicit authorization. Until then no
-    # account can have it; the guards for it are already in place.
+    # Stage 11: the platform (organisation-level) role. It has no campus and
+    # no campus permission; it signs in through the platform sign-in only.
+    # The database role type gains it with migration M1 (d5e8f0b2a314).
     SUPER_ADMIN = "SUPER_ADMIN"
     ADMIN = "ADMIN"
     KITCHEN_MANAGER = "KITCHEN_MANAGER"
@@ -21,11 +21,31 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
+    __mapper_args__ = {"eager_defaults": False}
+    __table_args__ = (
+        # Only SUPER_ADMIN has no campus; every other account has one (M1).
+        CheckConstraint(
+            "(CAST(role AS VARCHAR) = 'SUPER_ADMIN') = (campus_id IS NULL)",
+            name="ck_user_campus_by_role",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    campus_id: Mapped[int] = mapped_column(
+    # None only for SUPER_ADMIN (M1 makes the column nullable).
+    campus_id: Mapped[int | None] = mapped_column(
         ForeignKey("campuses.id"),
-        nullable=False,
+        nullable=True,
+    )
+
+    # M1: the organisation a SUPER_ADMIN manages (None = every organisation).
+    # Deferred, so campus code never selects it and keeps working on a
+    # database that does not have the column yet.
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id"),
+        nullable=True,
+        deferred=True,
+        # Left out of INSERTs unless set (see Campus for why).
+        server_default=FetchedValue(),
     )
 
     full_name: Mapped[str] = mapped_column(

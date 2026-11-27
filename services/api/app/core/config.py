@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     CSRF_COOKIE_NAME: str = "csrf_token"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
 
+    # Stage 11: platform (SUPER_ADMIN) sessions use their own cookie and
+    # signing key, last PLATFORM_SESSION_MINUTES and are not refreshed
+    # (sign in again after they expire). Interim, not a client decision.
+    PLATFORM_ACCESS_COOKIE_NAME: str = "platform_access_token"
+    PLATFORM_SESSION_MINUTES: int = 30
+
+    # Phase 3 (campus ERP headcount feed): the credential is read from the
+    # environment only and is never stored in the database or shown.
+    ERP_HEADCOUNT_API_TOKEN: str | None = None
+
     # Local development: False
     # Production with HTTPS: True
     COOKIE_SECURE: bool = False

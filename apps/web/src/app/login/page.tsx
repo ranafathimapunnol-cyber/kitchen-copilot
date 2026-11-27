@@ -41,7 +41,7 @@ export default function LoginPage() {
     <AuthShell
       title="Sign in to Kitchen Copilot"
       description="Use the account your campus admin created for you."
-      footer="Trouble signing in? Ask your campus admin to check your account."
+      footer={<>Trouble signing in? Ask your campus admin to check your account. Platform administrator? Use the <Link href="/platform/login" className="font-medium underline">platform sign-in</Link>.</>}
     >
       {error && (
         <Alert tone="error" className="mb-5">

@@ -6,7 +6,9 @@ application's own figures -> store any consequential action as a PENDING
 proposal for human approval (app/agent/executor.py). Nothing here writes
 business data.
 
-Workflows: plan_procure, explain_spending, stock_difference.
+Workflows: plan_procure, explain_spending, stock_difference, and the
+read-only attention summary (what needs attention, optionally focused on
+the screen the person is viewing).
 """
 
 import json
@@ -28,8 +30,10 @@ WORKFLOW_TITLES = {
     "plan_procure": "Plan and procure",
     "explain_spending": "Explain spending",
     "stock_difference": "Investigate a stock difference",
+    "attention": "What needs attention",
 }
-HELP = ("I can help with three jobs:\n"
+HELP = ("I can help with these jobs:\n"
+        "• What needs attention — e.g. \"What needs my attention today?\" (on any screen, I focus on that screen)\n"
         "• Plan and procure — e.g. \"Plan tomorrow's lunch for 450 people and tell me what we need to buy.\"\n"
         "• Explain spending — e.g. \"Why did food spending go up this month compared with last month?\"\n"
         "• Investigate a stock difference — e.g. \"Today's rice count is 12 kg below the system. Find out why.\"")
@@ -50,8 +54,11 @@ class Reply:
     def say(self, line: str):
         self.text.append(line)
 
+    page: str | None = None
+
     def payload(self) -> dict:
         return {"status": self.status, "workflow": self.intent.workflow, "intent": self.intent.as_dict(),
+                "page": self.page,
                 "plan": self.plan, "blocks": self.blocks, "choices": self.choices, "links": self.links,
                 "sources": self.sources, "proposal_ids": [p.id for p in self.proposals],
                 "reader": self.intent.reader, "notes": self.intent.notes}
@@ -428,23 +435,177 @@ def stock_difference(trace: T.Trace, reply: Reply, today: date, text: str):
 
 
 # ============================================================
+# WHAT NEEDS ATTENTION (read only)
+# ============================================================
+
+# Screens (path prefixes) and the overview sections that matter there.
+PAGE_FOCUS = (
+    (("/dashboard/stock", "/dashboard/items", "/dashboard/opening-stock", "/dashboard/kitchen-issues",
+      "/dashboard/waste-tracking", "/dashboard/categories", "/dashboard/units", "/dashboard/unit-conversions"),
+     "stock", ("stock", "counts", "kitchen")),
+    (("/dashboard/purchase-orders", "/dashboard/receipts", "/dashboard/supplier", "/dashboard/purchase-payment-report"),
+     "purchasing", ("payments", "spending", "stock")),
+    (("/dashboard/meals", "/dashboard/meal-plans", "/dashboard/meal-sessions", "/dashboard/menus",
+      "/dashboard/menu-main-items", "/dashboard/portion-standards"),
+     "meals and planning", ("headcount", "meals", "planning", "outsourced")),
+    (("/dashboard/outsourced-food",), "outsourced food", ("outsourced", "meals")),
+    (("/dashboard/analytics", "/dashboard/reports"), "spending and reports", ("spending", "payments", "stock")),
+)
+ALL_SECTIONS = ("headcount", "meals", "planning", "stock", "counts", "kitchen", "outsourced", "spending", "payments")
+
+# Follow-up questions offered with the summary, by screen.
+FOLLOW_UPS = {
+    "stock": [("Investigate a count difference", "Investigate the latest stock count difference")],
+    "purchasing": [("Explain spending", "Why did spending change this month?"),
+                   ("Plan and procure", "Plan tomorrow's lunch and tell me what to buy")],
+    "meals and planning": [("Plan tomorrow", "Plan tomorrow's lunch and tell me what to buy")],
+    "spending and reports": [("Explain spending", "Why did spending change this month?")],
+}
+
+
+def page_focus(page: str | None) -> tuple[str | None, tuple[str, ...]]:
+    for prefixes, label, keys in PAGE_FOCUS:
+        if page and any(page == p or page.startswith(p + "/") or (p.endswith("supplier") and page.startswith(p))
+                        for p in prefixes):
+            return label, keys
+    return None, ALL_SECTIONS
+
+
+def qty(value) -> str:
+    text = f"{Decimal(str(value)):f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def plural(n: int, one: str, many: str | None = None) -> str:
+    return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
+def findings(data: dict, keys: tuple[str, ...]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """(needs attention, for information): sentences with the screen to act on."""
+    act: list[tuple[str, str]] = []
+    info: list[tuple[str, str]] = []
+    for key in keys:
+        d = data.get(key)
+        if d is None:
+            continue
+        if key == "headcount":
+            if d["today"] is None:
+                act.append(("Today's headcount has not been recorded on a meal record yet.", "/dashboard/meals"))
+            else:
+                basis = "actual" if d.get("today_basis") == "actual" else "expected"
+                info.append((f"Today's headcount: {d['today']:,} ({basis}).", "/dashboard/meals"))
+        elif key == "meals":
+            if d["awaiting_close_count"]:
+                act.append((f"{plural(d['awaiting_close_count'], 'meal record')} from earlier days "
+                            f"{'is' if d['awaiting_close_count'] == 1 else 'are'} still open.", "/dashboard/meals"))
+            if d["open_count"]:
+                info.append((f"{plural(d['open_count'], 'meal record')} open in total.", "/dashboard/meals"))
+        elif key == "planning":
+            if d["draft_plans"]:
+                act.append((f"{plural(d['draft_plans'], 'meal plan')} still in draft.", "/dashboard/meal-plans"))
+            if d["draft_standards"]:
+                act.append((f"{plural(d['draft_standards'], 'portion standard')} still in draft.",
+                            "/dashboard/portion-standards"))
+            info.append((f"{plural(len(d['upcoming']), 'meal plan')} for the next 7 days.", "/dashboard/meal-plans"))
+        elif key == "stock":
+            if d["below_minimum"]:
+                names = ", ".join(f"{r['item_name']} ({qty(r['balance'])} of {qty(r['minimum'])}{' ' + r['unit'] if r['unit'] else ''})"
+                                  for r in d["lowest"][:4])
+                act.append((f"{plural(d['below_minimum'], 'item')} below minimum stock: {names}"
+                            f"{' and more' if d['below_minimum'] > 4 else ''}.", "/dashboard/stock"))
+            if d["out_of_stock"]:
+                act.append((f"{d['out_of_stock']} of {d['items_tracked']} tracked items are out of stock.",
+                            "/dashboard/stock"))
+            if not d["below_minimum"] and not d["out_of_stock"]:
+                info.append((f"All {d['items_tracked']} tracked items are at or above minimum.", "/dashboard/stock"))
+        elif key == "counts" and d["pending_adjustments"]:
+            act.append((f"{plural(d['pending_adjustments'], 'stock adjustment')} waiting for approval.",
+                        "/dashboard/stock-adjustments"))
+        elif key == "kitchen" and d["draft_issues"]:
+            act.append((f"{plural(d['draft_issues'], 'kitchen issue')} recorded but not posted.",
+                        "/dashboard/kitchen-issues"))
+        elif key == "outsourced":
+            if d["draft_deliveries"]:
+                act.append((f"{plural(d['draft_deliveries'], 'outsourced delivery', 'outsourced deliveries')} "
+                            "to confirm.", "/dashboard/outsourced-food"))
+            if d["waiting_for_meal_record"]:
+                act.append((f"{plural(d['waiting_for_meal_record'], 'outsourced order')} waiting for a meal record.",
+                            "/dashboard/meals"))
+        elif key == "spending":
+            change = pct(d["change_percent"])
+            info.append((f"Purchases this month: {money(d['current'])} ({change} against the same days last month).",
+                         "/dashboard/analytics"))
+        elif key == "payments":
+            if d["open_bill_count"]:
+                info.append((f"Outstanding payables: {money(d['outstanding'])} on {plural(d['open_bill_count'], 'open bill')} "
+                             f"to {plural(d['suppliers_owed'], 'supplier')}.", "/dashboard/supplier-balances"))
+    return act, info
+
+
+def attention(trace: T.Trace, reply: Reply, page: str | None):
+    label, keys = page_focus(page)
+    reply.plan = ["Read the campus overview through the dashboard's own permission checks",
+                  f"Pick out what matters for {label}" if label else "Pick out anything that needs action",
+                  "List each finding with the screen where it can be handled"]
+    data = T.call(trace, "operations_overview")
+    act, info = findings(data, keys)
+    if label and not act and not info:
+        # Nothing on this screen's topics is visible to this user; widen.
+        label, (act, info) = None, findings(data, ALL_SECTIONS)
+    where = f" for {label}" if label else ""
+    campus = data.get("campus_name") or "your campus"
+    if act:
+        reply.say(f"{plural(len(act), 'thing')} at {campus} need{'s' if len(act) == 1 else ''} attention{where}.")
+        reply.blocks.append({"type": "list", "title": "Needs attention", "items": [t for t, _h in act]})
+    elif info:
+        reply.say(f"Nothing at {campus} needs action{where} right now.")
+    else:
+        reply.say("You don't have access to any of the figures this summary uses. Ask your Admin if you need them.")
+    if info:
+        reply.blocks.append({"type": "list", "title": "For information", "items": [t for t, _h in info]})
+    seen: set[str] = set()
+    for _t, href in act + info:
+        if href not in seen:
+            seen.add(href)
+            reply.links.append({"label": LINK_LABELS.get(href, "Open"), "href": href})
+    reply.choices = [{"label": a, "text": b} for a, b in FOLLOW_UPS.get(label or "", [])]
+
+
+LINK_LABELS = {"/dashboard/meals": "Meal records", "/dashboard/meal-plans": "Meal plans",
+               "/dashboard/portion-standards": "Portion standards", "/dashboard/stock": "Stock",
+               "/dashboard/stock-adjustments": "Stock adjustments", "/dashboard/kitchen-issues": "Kitchen issues",
+               "/dashboard/outsourced-food": "Outsourced food", "/dashboard/analytics": "Spending analytics",
+               "/dashboard/supplier-balances": "Supplier balances"}
+
+
+# ============================================================
 # TURN
 # ============================================================
 
-def run_turn(db: Session, user: User, conversation_id: int, text: str, earlier: dict | None) -> tuple[Reply, T.Trace]:
+def run_turn(db: Session, user: User, conversation_id: int, text: str, earlier: dict | None,
+             page: str | None = None) -> tuple[Reply, T.Trace]:
+    """`page` is the screen the person is viewing (a /dashboard path). It only
+    focuses the attention summary and the suggestions; access is decided by
+    the user's own role and permissions, never by the page."""
     trace = T.Trace(db, user, conversation_id)
     today = campus_today()
     intent = understand(db, user, text, today, earlier, trace)
     reply = Reply(intent)
+    reply.page = page
     if not intent.workflow:
         reply.status = "needs_info"
         reply.say(HELP)
-        reply.choices = [{"label": "Plan and procure", "text": "Plan tomorrow's lunch and tell me what to buy"},
+        label, _keys = page_focus(page)
+        reply.choices = [{"label": "What needs attention" + (" here" if label else ""),
+                          "text": "What needs attention" + (" on this screen?" if label else " today?")},
+                         {"label": "Plan and procure", "text": "Plan tomorrow's lunch and tell me what to buy"},
                          {"label": "Explain spending", "text": "Why did spending change this month?"},
                          {"label": "Stock difference", "text": "Investigate a stock count difference"}]
         return reply, trace
     try:
-        if intent.workflow == "plan_procure":
+        if intent.workflow == "attention":
+            attention(trace, reply, page)
+        elif intent.workflow == "plan_procure":
             plan_procure(trace, reply, today)
         elif intent.workflow == "explain_spending":
             explain_spending(trace, reply, today)

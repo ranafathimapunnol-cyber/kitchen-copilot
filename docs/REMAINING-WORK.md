@@ -44,7 +44,7 @@ client addresses behind nginx (required before release; see
 | 9 | Stage 9 dashboard and reports | DASH01–DASH05, AT03 (interim Q4), AT07, report export TESTED; home dashboard rebuilt |
 | 10 | Stage 10 audit, security, users | Audit Log, User Accounts, Account Security screens; sign-in throttling (interim Q19); session revocation — TESTED |
 | 12 | Stage 12 Kitchen Copilot | Chat, plan, tool trace, proposals, approve/reject with permission re-check and audit — TESTED with the built-in reader and FakeLLM; `AGENT_ENABLED=false` by default; no live model key |
-| 11 | Stage 11 SUPER_ADMIN | Prepared and tested (migration `d5e8f0b2a314`, 3 tests, round trip 18/18), **not applied** — awaiting authorization |
+| 11 | Stage 11 / Phase 2 platform | Built: separate platform sign-in and app, organisation overview, campuses, analytics, users, append-only platform audit, integrations, health, ERP adapter (contract pending); 25 backend tests (full suite 817 passed), browser 52/52, migration verified on a restored backup (`docs/PHASE-2-PLATFORM.md`). Migration `d5e8f0b2a314` applied to the development database 27 Nov 2026 (backup `pre-d5e8f0b2a314-20261127-194541`); no platform account yet; images not rebuilt |
 | 13 | Stage 13 release | `RELEASE-GUIDE.md` written; nothing deployed |
 
 - Database: migration `c4d7e9a1f203` (M7) applied to the development

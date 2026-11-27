@@ -30,6 +30,11 @@ Statuses in `REQUIREMENTS-TRACEABILITY.md`; nothing here is ACCEPTED.
 
 ## Stage 11 — platform (SUPER_ADMIN) — prepared, not applied
 
+> **Superseded by `docs/PHASE-2-PLATFORM.md` (27 Nov 2026):** the platform is now
+> built in the working tree (separate sign-in and app, platform audit, ERP
+> adapter); M1 was extended and is still not applied. The text below is the
+> earlier design.
+
 Not in the working tree's API yet: migration `d5e8f0b2a314`, the platform
 routes, `scripts/create_super_admin.py` and their 3 tests are held back until
 M1 is authorized. The web screen `/dashboard/platform` exists but is reachable
@@ -79,6 +84,36 @@ same ADR-010 contract. ADR-009's PostgreSQL JSON option is used for traces.
 **Not available yet:** approved procedure documents (none supplied; the agent
 says guidance is unavailable from approved sources); a live Gemini key (not
 configured — the FakeLLM tests cover that path).
+
+## Global Copilot panel (27 November 2026)
+
+- **Everywhere:** a launcher at the bottom right of every campus dashboard
+  screen opens a floating chat panel (full screen on phones). It is hidden on
+  the full Copilot page, for SUPER_ADMIN, while the phone menu is open and
+  when printing. One conversation is shared by the panel and the full page
+  and kept across screens; the open conversation id is kept for the browser
+  tab, so a reload reopens it.
+- **Page context:** each question carries the screen being viewed
+  (`page`, `/dashboard/...` paths only, validated by the API, recorded in the
+  ASK audit row). It only focuses the answer and the suggested questions;
+  access always comes from the user's own role and permissions.
+- **New read-only job, "What needs attention":** reads the campus overview
+  through the dashboard's own per-section permission checks (tool
+  `operations_overview`, needs `dashboard.read`) and lists what needs action
+  for the current screen's topic (stock, purchasing, meals and planning,
+  outsourced food, spending and reports) or everything on the dashboard, with
+  links to the screens where each item is handled. It writes nothing.
+- **Shown in the panel:** the tools each answer used ("Checked: …"), the
+  plan, proposal cards with Approve/Reject for people allowed to decide, an
+  Approvals tab, and a badge on the launcher counting PENDING proposals this
+  user may decide (refreshed every two minutes while the tab is visible).
+  Approval rules are unchanged: Copilot only proposes; the approve and reject
+  endpoints re-check the deciding person's role and permission.
+- **Fixed with it:** a campus name containing a weekday or month (menu
+  "Monday Lunch") no longer moves the date of a planning request.
+- **Tests:** `tests/test_copilot_global.py` (17), `apps/web/tests/copilot.test.mjs`
+  (3); browser check on a throwaway copy of the development data, 43/43 and
+  5/5 with the assistant turned off.
 
 ## Review on realistic data (27 November 2026)
 

@@ -69,7 +69,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-label="Notifications"
         className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end print:hidden"
         style={{
-          paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))",
+          // --kc-dock-offset: room for the Copilot launcher when it is shown.
+          paddingBottom: "calc(max(1rem, env(safe-area-inset-bottom, 0px)) + var(--kc-dock-offset, 0px))",
         }}
       >
         {toasts.map((toast) => {

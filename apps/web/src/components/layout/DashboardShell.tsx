@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 
 import CommandPalette from "./CommandPalette";
+import CopilotDock from "@/components/copilot/CopilotDock";
+import CopilotProvider from "@/components/copilot/CopilotProvider";
 import Sidebar from "./Sidebar";
 import { CurrentUserContext } from "./CurrentUser";
 import {
@@ -314,6 +316,7 @@ function DashboardWorkspace({
   });
 
   return (
+    <CopilotProvider userId={user.id} role={user.role}>
     <div className="min-h-screen bg-slate-50 print:min-h-0 print:bg-white">
       <a
         href="#main-content"
@@ -417,12 +420,14 @@ function DashboardWorkspace({
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1480px] min-w-0 flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-10 lg:py-9 print:max-w-none print:p-0"
+          className="mx-auto w-full max-w-[1480px] min-w-0 flex-1 px-4 pt-6 pb-28 focus:outline-none sm:px-6 lg:px-10 lg:pt-9 print:max-w-none print:p-0"
         >
           {children}
         </main>
       </div>
+      <CopilotDock hidden={mobileOpen} />
     </div>
+    </CopilotProvider>
   );
 }
 

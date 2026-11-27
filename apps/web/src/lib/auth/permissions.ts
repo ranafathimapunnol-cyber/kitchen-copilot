@@ -100,7 +100,7 @@ const ROLE_PATHS: Record<string, string[]> = {
 
 /** Where each role lands; SUPER_ADMIN has no campus dashboard (Stage 11). */
 export function homePath(role: string): string {
-  return role === "SUPER_ADMIN" ? "/dashboard/platform" : "/dashboard";
+  return role === "SUPER_ADMIN" ? "/platform" : "/dashboard";
 }
 
 export function canAccessPath(
@@ -108,13 +108,10 @@ export function canAccessPath(
   pathname: string,
   permissions: string[]
 ): boolean {
-  // SUPER_ADMIN manages organisations and campuses only (Stage 11).
+  // SUPER_ADMIN uses the separate platform app (/platform, its own sign-in
+  // and session) and never the campus dashboard (Stage 11).
   if (role === "SUPER_ADMIN") {
-    return (
-      pathname === "/dashboard/platform" ||
-      pathname.startsWith("/dashboard/platform/") ||
-      pathname === "/dashboard/account"
-    );
+    return false;
   }
   if (pathname === "/dashboard/platform" || pathname.startsWith("/dashboard/platform/")) {
     return false;

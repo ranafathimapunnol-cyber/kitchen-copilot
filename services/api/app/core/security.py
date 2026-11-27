@@ -146,6 +146,36 @@ def decode_access_token(token: str) -> dict:
 
 
 # ============================================================
+# PLATFORM SESSION TOKENS (Stage 11)
+# ============================================================
+
+_PLATFORM_SESSION_KEY_LABEL = "kitchen-copilot:platform-session:v1"
+PLATFORM_TOKEN_TYPE = "platform"
+
+
+def create_platform_token(user_id: int, stored_hash: str) -> str:
+    """A SUPER_ADMIN session. Signed with its own derived key, so it never
+    verifies as a campus session token (or the reverse)."""
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(user_id),
+        "type": PLATFORM_TOKEN_TYPE,
+        "jti": secrets.token_urlsafe(16),
+        "pwd": password_fingerprint(stored_hash),
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.PLATFORM_SESSION_MINUTES),
+    }
+    return jwt.encode(payload, _derived_key(_PLATFORM_SESSION_KEY_LABEL), algorithm="HS256")
+
+
+def decode_platform_token(token: str) -> dict:
+    payload = jwt.decode(token, _derived_key(_PLATFORM_SESSION_KEY_LABEL), algorithms=["HS256"])
+    if payload.get("type") != PLATFORM_TOKEN_TYPE:
+        raise jwt.InvalidTokenError("not a platform session")
+    return payload
+
+
+# ============================================================
 # PASSWORD SETUP AND RESET TOKENS
 # ============================================================
 

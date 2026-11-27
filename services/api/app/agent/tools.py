@@ -187,6 +187,18 @@ def spending_comparison(db: Session, user: User, date_from: date, date_to: date,
     return build_spending(db, user, date_from, date_to, compare, None, category_id, item_id)
 
 
+OVERVIEW_SECTIONS = ("campus_name", "headcount", "stock", "meals", "planning", "outsourced", "kitchen", "counts",
+                     "spending", "payments")
+
+
+@tool("operations_overview", "The campus operational overview: the same figures, and the same per-section "
+      "permission checks, as the dashboard.", ("dashboard.read",))
+def operations_overview(db: Session, user: User) -> dict:
+    from app.api.routes.dashboard import dashboard_overview
+    data = dashboard_overview(db=db, user=user)
+    return {key: data[key] for key in OVERVIEW_SECTIONS if key in data}
+
+
 @tool("headcount_summary", "Average daily headcount from meal records for two periods.", ("meal.read",))
 def headcount_summary(db: Session, user: User, periods: dict) -> dict:
     from app.models.meals import MealRecord

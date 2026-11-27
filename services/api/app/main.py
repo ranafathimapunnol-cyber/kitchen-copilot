@@ -19,7 +19,7 @@ from app.api.routes import planning
 from app.api.routes import outsourced
 from app.api.routes import analytics
 from app.api.routes import reports
-from app.api.routes import admin_users, agent, audit
+from app.api.routes import admin_users, agent, audit, campus_media, platform
 from app.services.attachment_storage import StorageNotConfigured
 from app.api.routes import auth, master_data, purchases, receipts
 from app.core.config import settings
@@ -136,6 +136,8 @@ app.include_router(reports.router)
 app.include_router(admin_users.router)
 app.include_router(audit.router)
 app.include_router(agent.router)
+app.include_router(platform.router)
+app.include_router(campus_media.router)
 app.include_router(authorization.router)
 app.include_router(waste.router)
 

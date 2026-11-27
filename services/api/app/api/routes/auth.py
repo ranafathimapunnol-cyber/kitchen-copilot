@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.api.dependencies import get_current_user, require_roles, session_revoked
+from app.api.dependencies import (
+    CAMPUS_INACTIVE_MESSAGE,
+    campus_is_active,
+    get_current_user,
+    require_roles,
+    session_revoked,
+)
 from app.core.config import settings
 from app.core.security import (
     hash_password,
@@ -142,7 +148,12 @@ def login(
 
     user = db.query(User).filter(User.email == data.email).first()
     ok = bool(user) and verify_password(data.password, user.password_hash)
-    db.add(LoginAttempt(email=email, ip_address=ip, succeeded=bool(ok and user.is_active),
+    # Stage 11: platform accounts use the platform sign-in, and users of a
+    # deactivated campus cannot sign in (their records are kept).
+    platform_account = bool(user) and (user.role == UserRole.SUPER_ADMIN or user.campus_id is None)
+    campus_closed = bool(user) and not platform_account and not campus_is_active(db, user.campus_id)
+    db.add(LoginAttempt(email=email, ip_address=ip,
+                        succeeded=bool(ok and user.is_active and not platform_account and not campus_closed),
                         user_id=user.id if user else None))
 
     if not ok:
@@ -158,6 +169,14 @@ def login(
             status_code=403,
             detail="Account is inactive",
         )
+
+    if platform_account:
+        db.commit()
+        raise HTTPException(status_code=403, detail="Platform accounts sign in on the platform sign-in page.")
+
+    if campus_closed:
+        db.commit()
+        raise HTTPException(status_code=403, detail=CAMPUS_INACTIVE_MESSAGE)
 
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
@@ -217,7 +236,8 @@ def refresh_token(
 
     user = db.query(User).filter(User.id == user_id).first()
 
-    if not user or not user.is_active:
+    if (not user or not user.is_active or user.role == UserRole.SUPER_ADMIN or user.campus_id is None
+            or not campus_is_active(db, user.campus_id)):
         raise HTTPException(
             status_code=401,
             detail="User is unavailable",

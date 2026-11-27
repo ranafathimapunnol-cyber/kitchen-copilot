@@ -36,6 +36,9 @@ SPEND = ("spend", "spent", "spending", "expenditure", "expense", "cost more", "c
 STOCK = ("count", "counted", "difference", "below the system", "above the system", "short", "shortage", "missing",
          "discrepan", "variance", "mismatch", "physical", "investigate", "adjust")
 PLAN = ("plan", "buy", "procure", "purchase", "order", "need for", "people", "persons", "pax", "cook", "prepare")
+# "What needs attention?" (a read-only summary of the operational overview).
+ATTENTION = ("attention", "summar", "overview", "urgent", "priorit", "pending", "what should i", "what needs",
+             "anything i should", "catch me up", "brief me", "what's happening", "whats happening", "at a glance")
 
 
 @dataclass
@@ -203,6 +206,20 @@ def campus_names(db: Session, user: User) -> dict:
     }
 
 
+DATE_WORDS = set(WEEKDAYS) | {m for m in MONTHS if len(m) >= 3} | {"today", "tomorrow", "tonight", "yesterday"}
+
+
+def without_dated_names(text: str, names: dict) -> str:
+    """The text with campus names that contain a date word blanked out, so a
+    menu called "Monday Lunch" does not read as next Monday."""
+    for key in ("sessions", "menus", "items", "categories"):
+        for row in names.get(key, []):
+            name = norm(row[1]).strip()
+            if name and DATE_WORDS & set(name.split()) and f" {name} " in text:
+                text = text.replace(f" {name} ", " ")
+    return text
+
+
 def rule_read(text_raw: str, today: date, names: dict) -> Intent:
     text = norm(text_raw)
     intent = Intent()
@@ -210,6 +227,7 @@ def rule_read(text_raw: str, today: date, names: dict) -> Intent:
         "explain_spending": sum(k in text for k in SPEND),
         "stock_difference": sum(k in text for k in STOCK),
         "plan_procure": sum(k in text for k in PLAN),
+        "attention": 2 * sum(k in text for k in ATTENTION),
     }
     if " why " in text and scores["explain_spending"]:
         scores["explain_spending"] += 2
@@ -218,7 +236,7 @@ def rule_read(text_raw: str, today: date, names: dict) -> Intent:
     top = max(scores, key=scores.get)
     intent.workflow = top if scores[top] else None
 
-    dates = read_dates(text, today)
+    dates = read_dates(without_dated_names(text, names), today)
     if "day" in dates:
         intent.plan_date = dates["day"].isoformat()
     if "range" in dates:

@@ -5,6 +5,11 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 const CSRF_ENDPOINT = "/api/auth/csrf";
+
+/** Absolute URL of an API path, for <img src> of authenticated images. */
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
 const REFRESH_ENDPOINT = "/api/auth/refresh";
 
 type ApiOptions = Omit<RequestInit, "body"> & {
@@ -161,12 +166,12 @@ async function refreshSession(): Promise<boolean> {
  * Redirect to login only when the user is not already there.
  * This prevents a full-page login refresh loop.
  */
-function redirectToLogin(): void {
+function redirectToLogin(target = "/login"): void {
   if (typeof window === "undefined") {
     return;
   }
 
-  if (window.location.pathname === "/login") {
+  if (window.location.pathname === target) {
     return;
   }
 
@@ -175,8 +180,12 @@ function redirectToLogin(): void {
   }
 
   redirectingToLogin = true;
-  window.location.replace("/login");
+  window.location.replace(target);
 }
+
+/** Platform (SUPER_ADMIN) requests: their own session, never refreshed. */
+const PLATFORM_PREFIX = "/api/platform/";
+const PLATFORM_LOGIN = "/api/platform/auth/login";
 
 export async function apiRequest<T>(
   endpoint: string,
@@ -190,8 +199,17 @@ export async function apiRequest<T>(
     "/api/auth/csrf",
   ];
 
+  // A platform session is not refreshed: on 401 the person signs in again
+  // on the platform sign-in page.
+  if (endpoint.startsWith(PLATFORM_PREFIX)) {
+    if (response.status === 401 && endpoint !== PLATFORM_LOGIN && endpoint !== "/api/platform/auth/me") {
+      redirectToLogin("/platform/login");
+    }
+  }
+
   const shouldRefresh =
     response.status === 401 &&
+    !endpoint.startsWith(PLATFORM_PREFIX) &&
     !excludedRefreshRoutes.includes(endpoint);
 
   if (shouldRefresh) {

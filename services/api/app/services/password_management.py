@@ -1,9 +1,10 @@
 """Password setup and reset by email.
 
-Applies to the roles in SELF_SERVICE_PASSWORD_ROLES: ADMIN today.
-SUPER_ADMIN is meant to join that set, but the role does not exist yet;
-adding it needs a schema change that is awaiting approval. Kitchen Manager
-and Staff passwords stay with their campus ADMIN, as before.
+Applies to the roles in SELF_SERVICE_PASSWORD_ROLES: campus ADMIN and the
+platform SUPER_ADMIN (Stage 11; the role exists in the database only after
+migration M1). Kitchen Manager and Staff passwords stay with their campus
+ADMIN, as before. Events of platform accounts (no campus) go to the
+platform audit log.
 
 Links are signed tokens bound to the account's current password hash (see
 app.core.security), so nothing is stored and no migration is needed.
@@ -38,7 +39,7 @@ from app.models.user import User, UserRole
 
 logger = logging.getLogger(__name__)
 
-SELF_SERVICE_PASSWORD_ROLES = frozenset({UserRole.ADMIN})
+SELF_SERVICE_PASSWORD_ROLES = frozenset({UserRole.ADMIN, UserRole.SUPER_ADMIN})
 
 FORGOT_PASSWORD_MESSAGE = (
     "If an eligible account exists for this email address, password reset "
@@ -122,6 +123,12 @@ def record_password_event(
 ) -> None:
     """actor_id is the person who acted: the user themselves when they
     complete a link, None for an anonymous request or the operator CLI."""
+    if user.campus_id is None:
+        from app.models.platform import PlatformAuditLog
+
+        db.add(PlatformAuditLog(actor_user_id=actor_id, actor_email=user.email, action=action,
+                                target_type="USER", target_id=user.id, outcome="SUCCESS", details=details or {}))
+        return
     db.add(
         AuditLog(
             campus_id=user.campus_id,
@@ -293,6 +300,8 @@ def _deliver(
 
 
 def _campus_name(db: Session, user: User) -> str | None:
+    if user.campus_id is None:
+        return None
     campus = db.get(Campus, user.campus_id)
     return campus.name if campus else None
 

@@ -6,11 +6,9 @@ import assert from "node:assert/strict";
 import { canAccessPath, homePath } from "../src/lib/auth/permissions.ts";
 import { proposalLines } from "../src/lib/agent.ts";
 
-test("SUPER_ADMIN reaches only the platform and their own account", () => {
-  assert.equal(homePath("SUPER_ADMIN"), "/dashboard/platform");
-  assert.equal(canAccessPath("SUPER_ADMIN", "/dashboard/platform", []), true);
-  assert.equal(canAccessPath("SUPER_ADMIN", "/dashboard/account", []), true);
-  for (const path of ["/dashboard", "/dashboard/items", "/dashboard/users", "/dashboard/copilot", "/dashboard/audit"]) {
+test("SUPER_ADMIN uses only the separate platform app, never a campus screen", () => {
+  assert.equal(homePath("SUPER_ADMIN"), "/platform");
+  for (const path of ["/dashboard", "/dashboard/platform", "/dashboard/account", "/dashboard/items", "/dashboard/users", "/dashboard/copilot", "/dashboard/audit"]) {
     assert.equal(canAccessPath("SUPER_ADMIN", path, []), false, path);
   }
 });
