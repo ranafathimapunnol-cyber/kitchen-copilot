@@ -5,6 +5,7 @@ import type { SubmitEvent } from "react";
 import {
   History,
   MousePointerClick,
+  ChefHat,
   RefreshCw,
   RotateCcw,
   Save,
@@ -124,6 +125,8 @@ export default function StaffManagementPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [createError, setCreateError] = useState("");
+  // Which account type the Add form creates (27 Nov 2026: Admins add both).
+  const [createRole, setCreateRole] = useState<"STAFF" | "KITCHEN_MANAGER">("STAFF");
 
   const selectedStaff = useMemo(
     () => staff.find((member) => member.id === selectedStaffId) ?? null,
@@ -262,7 +265,8 @@ export default function StaffManagementPage() {
     });
   };
 
-  const openCreateForm = () => {
+  const openCreateForm = (role: "STAFF" | "KITCHEN_MANAGER" = "STAFF") => {
+    setCreateRole(role);
     setFullName("");
     setEmail("");
     setPassword("");
@@ -280,13 +284,20 @@ export default function StaffManagementPage() {
         full_name: fullName.trim(),
         email: email.trim(),
         password,
-        role: "STAFF",
+        role: createRole,
       });
 
       setFullName("");
       setEmail("");
       setPassword("");
       setShowCreateForm(false);
+
+      if (createRole === "KITCHEN_MANAGER") {
+        // Kitchen Managers hold every kitchen permission by role; there is
+        // nothing to assign here. They appear on User Accounts.
+        toast.success(`${created.full_name || "Kitchen Manager"} created as Kitchen Manager. They can sign in now.`);
+        return;
+      }
 
       const updatedStaff = await api.get<StaffMember[]>(ENDPOINTS.staff);
       setStaff(updatedStaff);
@@ -355,12 +366,22 @@ export default function StaffManagementPage() {
         title="Staff Management"
         description="Create staff accounts and choose which modules each person can use."
         actions={
-          <Button
-            onClick={openCreateForm}
-            icon={<UserPlus size={16} aria-hidden />}
-          >
-            Add staff
-          </Button>
+          <>
+            <Button
+              onClick={() => openCreateForm("STAFF")}
+              icon={<UserPlus size={16} aria-hidden />}
+            >
+              Add staff
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => openCreateForm("KITCHEN_MANAGER")}
+              icon={<ChefHat size={16} aria-hidden />}
+              data-add-manager
+            >
+              Add Kitchen Manager
+            </Button>
+          </>
         }
       />
 
@@ -426,7 +447,7 @@ export default function StaffManagementPage() {
               action={
                 <Button
                   size="sm"
-                  onClick={openCreateForm}
+                  onClick={() => openCreateForm("STAFF")}
                   icon={<UserPlus size={14} aria-hidden />}
                 >
                   Add staff
@@ -686,8 +707,10 @@ export default function StaffManagementPage() {
           if (!creating) setShowCreateForm(false);
         }}
         dismissible={!creating}
-        title="Add staff account"
-        description="New accounts get the Staff role and no module access until you assign it."
+        title={createRole === "KITCHEN_MANAGER" ? "Add Kitchen Manager account" : "Add staff account"}
+        description={createRole === "KITCHEN_MANAGER"
+          ? "Kitchen Managers run every kitchen operation on this campus but cannot manage users or permissions."
+          : "New accounts get the Staff role and no module access until you assign it."}
         footer={
           <>
             <Button
@@ -727,7 +750,7 @@ export default function StaffManagementPage() {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="staff@example.com"
+            placeholder="name@example.com"
             autoComplete="off"
             required
           />
@@ -737,7 +760,7 @@ export default function StaffManagementPage() {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            hint="At least 8 characters. Share it with the staff member securely."
+            hint="At least 8 characters. Share it with the person securely."
             autoComplete="new-password"
             minLength={8}
             required
