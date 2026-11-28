@@ -72,9 +72,14 @@ jobs:
         run: |
           python -c "import psycopg; conn=psycopg.connect('host=localhost port=5432 dbname=kitchen_copilot_ci user=postgres password=postgres'); conn.execute('CREATE EXTENSION IF NOT EXISTS vector'); conn.commit(); print('PostgreSQL and pgvector are ready')"
 
+      # The CI database is a fresh, empty, disposable service container. The
+      # guarded migrations (M1 d5e8f0b2a314, M2 e2b7c4d9a5f1, M3 a7d3e9b1c4f2)
+      # are authorized here, one revision at a time with its exact variable,
+      # after the script has checked that each guard refuses without it.
+      # Nothing here applies to any other database.
       - name: Run database migrations
         working-directory: services/api
-        run: alembic upgrade head
+        run: bash scripts/ci_migrate.sh
 
       - name: Verify migration revision
         working-directory: services/api
