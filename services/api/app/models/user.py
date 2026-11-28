@@ -3,7 +3,7 @@ import enum
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, FetchedValue, ForeignKey, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, FetchedValue, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -27,6 +27,12 @@ class User(Base):
         CheckConstraint(
             "(CAST(role AS VARCHAR) = 'SUPER_ADMIN') = (campus_id IS NULL)",
             name="ck_user_campus_by_role",
+        ),
+        # Migration a7d3e9b1c4f2: at most one active ADMIN per campus.
+        Index(
+            "uq_users_one_active_admin_per_campus", "campus_id", unique=True,
+            postgresql_where=text("role = 'ADMIN' AND is_active"),
+            sqlite_where=text("role = 'ADMIN' AND is_active"),
         ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)

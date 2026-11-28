@@ -316,7 +316,7 @@ function DashboardWorkspace({
   });
 
   return (
-    <CopilotProvider userId={user.id} role={user.role}>
+    <CopilotProvider userId={user.id} role={user.role} permissions={permissions}>
     <div className="min-h-screen bg-slate-50 print:min-h-0 print:bg-white">
       <a
         href="#main-content"

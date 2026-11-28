@@ -16,7 +16,7 @@ test("SUPER_ADMIN uses only the separate platform app, never a campus screen", (
 test("campus roles never reach the platform; only ADMIN manages user accounts", () => {
   for (const role of ["ADMIN", "KITCHEN_MANAGER", "STAFF"]) {
     assert.equal(canAccessPath(role, "/dashboard/platform", ["audit.read"]), false, role);
-    assert.equal(canAccessPath(role, "/dashboard/copilot", []), true, role);
+    assert.equal(canAccessPath(role, "/dashboard/copilot", ["copilot.read"]), true, role);
     assert.equal(canAccessPath(role, "/dashboard/account", []), true, role);
   }
   assert.equal(canAccessPath("ADMIN", "/dashboard/users", []), true);
@@ -32,4 +32,18 @@ test("a purchase-order proposal lists exactly what will be created", () => {
       items: [{ item_name: "Rice", quantity: "47.500", unit_symbol: "kg" }] },
   });
   assert.deepEqual(lines, ["Supplier: Fresh Farms", "Rice: 47.500 kg", "Expected by 2026-11-27"]);
+});
+
+test("27 Nov 2026: Copilot, reports, tasks and receipts follow their codes for STAFF", () => {
+  assert.equal(canAccessPath("STAFF", "/dashboard/copilot", []), false);
+  assert.equal(canAccessPath("STAFF", "/dashboard/reports", ["dashboard.read"]), false);
+  assert.equal(canAccessPath("STAFF", "/dashboard/reports", ["report.read"]), true);
+  assert.equal(canAccessPath("STAFF", "/dashboard/tasks", ["task.read"]), true);
+  assert.equal(canAccessPath("STAFF", "/dashboard/tasks", []), false);
+  assert.equal(canAccessPath("STAFF", "/dashboard/receipts", ["goods_receipt.read"]), true);
+  assert.equal(canAccessPath("STAFF", "/dashboard/receipts", ["inventory.read"]), true);
+  assert.equal(canAccessPath("STAFF", "/dashboard/receipts/new", ["goods_receipt.read"]), false);
+  assert.equal(canAccessPath("KITCHEN_MANAGER", "/dashboard/users", ["task.read"]), false);
+  assert.equal(canAccessPath("KITCHEN_MANAGER", "/dashboard/staff", ["task.read"]), false);
+  assert.equal(canAccessPath("ADMIN", "/dashboard/tasks", []), true);
 });

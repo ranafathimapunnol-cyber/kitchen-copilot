@@ -30,9 +30,15 @@ WORKFLOW_TOOLS = {"plan_procure": "meal_options", "explain_spending": "spending_
                   "stock_difference": "latest_count_line", "attention": "operations_overview"}
 
 
-def campus_user(user: User = Depends(get_current_user)) -> User:
+def campus_user(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
     if user.role == UserRole.SUPER_ADMIN or user.campus_id is None:
         raise HTTPException(status_code=403, detail="Kitchen Copilot is for campus users.")
+    # Owner request 27 Nov 2026: STAFF use Copilot only when an Admin has
+    # assigned copilot.read; ADMIN and KITCHEN_MANAGER always may.
+    from app.api.dependencies import user_has_permission
+
+    if not user_has_permission(db, user, "copilot.read"):
+        raise HTTPException(status_code=403, detail="Kitchen Copilot has not been assigned to you.")
     return user
 
 

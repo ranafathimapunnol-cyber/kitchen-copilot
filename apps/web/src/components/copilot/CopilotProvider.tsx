@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { api } from "@/lib/api/client";
+import { canAccessPath } from "@/lib/auth/permissions";
 import { AGENT_ENDPOINT } from "@/lib/api/endpoints";
 import { pageContext, type AgentMessage, type AgentProposal, type AgentStatus } from "@/lib/agent";
 import { errorMessage } from "@/lib/payments";
@@ -55,10 +56,13 @@ const POLL_MS = 120_000;
  * every decision goes through /api/agent, which checks the user's role,
  * permissions and campus on each call.
  */
-export default function CopilotProvider({ userId, role, children }: { userId: number | string; role: string; children: ReactNode }) {
+export default function CopilotProvider({ userId, role, permissions, children }: {
+  userId: number | string; role: string; permissions: string[]; children: ReactNode;
+}) {
   const toast = useToast();
   const pathname = usePathname();
-  const available = role !== "SUPER_ADMIN";
+  // STAFF need copilot.read (27 Nov 2026); the API checks the same.
+  const available = canAccessPath(role, "/dashboard/copilot", permissions);
   const storageKey = `kc.copilot.thread.${userId}`;
 
   const [status, setStatus] = useState<AgentStatus | null>(null);

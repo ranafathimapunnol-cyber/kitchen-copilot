@@ -239,3 +239,39 @@ docker compose -f compose.yaml -f <local-safety-override> --profile core up -d -
   M2 is authorized and applied, **do not rebuild the API image** (the new
   image would refuse to start). Restarting the current container is safe.
 - **Tests:** `tests/test_campus_media.py` 13 passed; browser 19/19.
+
+## 11. One Admin per campus, Staff management and tasks (27–28 Nov 2026) — M3 `a7d3e9b1c4f2` applied
+
+- **Zaitoon clean-up (owner-approved):** deleted #11 `demo@gmail.com` and #12
+  `ranafathimapunnol@gmail.com` (invitations never completed, no records);
+  #13 `kitchenmanager@kitchencopilot.com` changed ADMIN → KITCHEN_MANAGER
+  (sessions revoked). Backup `pre-zaitoon-admins-20261127-223320`. Audited
+  in campus and platform audit logs.
+- **One active Admin per campus:** partial unique index
+  `uq_users_one_active_admin_per_campus`; platform invite refuses a second
+  Admin; platform **Replace Admin** deactivates the current Admin and invites
+  the new one atomically (nothing changes if the email fails); campus Admins
+  cannot reactivate a second Admin; the provisioning service refuses too.
+- **Admin → User Accounts:** Add Staff and Add Kitchen Manager (own campus,
+  temporary password); no ADMIN or SUPER_ADMIN creation.
+- **New permission codes** (migration M3): `goods_receipt.create/read/update`,
+  `report.read`, `task.read`, `task.update`, `copilot.read`. Staff-assignable
+  now also: `purchase_bill.*` (supplier bills). Purchase orders stay ADMIN and
+  KITCHEN_MANAGER only. Goods receipts accept `goods_receipt.*` or the
+  existing `inventory.*` (no existing access lost). **Staff now need
+  `report.read` for Reports and `copilot.read` for Copilot** (existing Staff
+  must be granted them).
+- **Kitchen Manager:** every operational code including the new ones except
+  `task.update`; cannot manage users or permissions (unchanged), cannot
+  delete master records (unchanged; items with stock are protected by
+  references).
+- **Tasks** (`/dashboard/tasks`, `/api/tasks`): ADMIN creates, assigns (to
+  active Staff of the campus), edits, cancels, reopens; KITCHEN_MANAGER
+  reads; STAFF with `task.read` see their own and with `task.update` start /
+  finish / restart them with a note. Categories: purchase, inventory, stock
+  counting, goods receipt, meal preparation, cleaning, waste, general.
+  Optimistic versioning; every change audited (`STAFF_TASK`).
+- **M3 applied 28 Nov 2026 08:16** after backup
+  `pre-a7d3e9b1c4f2-20261128-081552` (restore identical); only modules
+  14→18 and permissions 37→44 changed. Tests: backend 845 passed; frontend
+  93; browser 22/22 on a throwaway copy.

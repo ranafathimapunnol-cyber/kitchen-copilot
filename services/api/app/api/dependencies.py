@@ -85,6 +85,17 @@ KITCHEN_MANAGER_PERMISSIONS = {
     "waste_tracking.create",
     "waste_tracking.read",
     "waste_tracking.update",
+
+    # Migration a7d3e9b1c4f2 (27 November 2026): the Kitchen Manager keeps
+    # every kitchen operation it had (goods receipts were inventory.*), sees
+    # reports, uses Copilot and sees the campus's tasks. Assigning tasks and
+    # managing users or permissions stay with the ADMIN.
+    "goods_receipt.create",
+    "goods_receipt.read",
+    "goods_receipt.update",
+    "report.read",
+    "task.read",
+    "copilot.read",
 }
 
 
@@ -156,6 +167,22 @@ STAFF_ASSIGNABLE_PERMISSIONS = frozenset({
     "waste_tracking.create",
     "waste_tracking.read",
     "waste_tracking.update",
+
+    # Owner request 27 November 2026 (Admin → Staff permissions):
+    # supplier bills (purchasing), goods receipts (their own codes, so a
+    # receipt grant no longer needs inventory.create/update, which also cover
+    # items and suppliers), reports, tasks and Kitchen Copilot. Purchase
+    # orders stay ADMIN and KITCHEN_MANAGER only (STAFF_EXCLUDED_PERMISSIONS).
+    "purchase_bill.create",
+    "purchase_bill.read",
+    "purchase_bill.update",
+    "goods_receipt.create",
+    "goods_receipt.read",
+    "goods_receipt.update",
+    "report.read",
+    "task.read",
+    "task.update",
+    "copilot.read",
 })
 
 
@@ -358,6 +385,19 @@ def require_permission(permission_code: str):
         )
 
     return permission_checker
+
+
+def require_any_permission(*codes: str):
+    """Passes when the user holds any one of the codes (same rules as
+    require_permission for each)."""
+
+    def checker(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+        if any(user_has_permission(db, current_user, code) for code in codes):
+            return current_user
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not have permission to perform this action.")
+
+    return checker
 
 
 def user_has_permission(db: Session, user: User, permission_code: str) -> bool:

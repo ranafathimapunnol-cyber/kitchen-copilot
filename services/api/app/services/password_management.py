@@ -327,6 +327,16 @@ def provision_admin(
     """
     existing = db.query(User).filter(User.email == email).first()
 
+    # One active Admin per campus (migration a7d3e9b1c4f2): a new Admin only
+    # for a campus without one (replacement deactivates the current one first).
+    if not existing:
+        current = (db.query(User.id).filter(User.campus_id == campus.id, User.role == UserRole.ADMIN,
+                                            User.is_active.is_(True)).first())
+        if current:
+            raise AccountProvisioningError(
+                "This campus already has an active Admin. Replace the Admin instead."
+            )
+
     if existing:
         if existing.role != UserRole.ADMIN or existing.campus_id != campus.id:
             raise AccountProvisioningError(

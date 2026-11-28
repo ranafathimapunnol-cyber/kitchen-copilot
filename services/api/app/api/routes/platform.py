@@ -30,6 +30,7 @@ from app.core.clock import campus_today, utc_iso
 from app.core.config import settings
 from app.core.security import create_platform_token, verify_password
 from app.db.session import get_db
+from app.models.audit_log import AuditLog
 from app.models.campus import Campus
 from app.models.organization import Organization
 from app.models.platform import CampusIntegration, ErpSyncRun, PlatformAuditLog
@@ -595,6 +596,10 @@ def provision_campus_admin(campus_id: int, payload: AdminInput, request: Request
     if campus.is_active is False:
         raise HTTPException(status_code=409, detail="Activate the campus first.")
     email = str(payload.email).strip().lower()
+    current = active_admin(db, campus.id)
+    if current and current.email != email:
+        raise HTTPException(status_code=409, detail=f"This campus already has an active Admin ({current.email}). "
+                                                    "Use Replace Admin to hand over to someone else.")
     try:
         admin, created = provision_admin(db, campus, payload.full_name, email)
     except AccountProvisioningError as exc:
@@ -608,6 +613,49 @@ def provision_campus_admin(campus_id: int, payload: AdminInput, request: Request
     db.commit()
     return {"id": admin.id, "full_name": admin.full_name, "email": admin.email, "created": created,
             "message": "Setup link emailed." if created else "A new setup link was emailed."}
+
+
+def active_admin(db: Session, campus_id: int) -> User | None:
+    return (db.query(User).filter(User.campus_id == campus_id, User.role == UserRole.ADMIN, User.is_active.is_(True))
+            .with_for_update().first())
+
+
+@router.post("/campuses/{campus_id}/admins/replace", status_code=201)
+def replace_campus_admin(campus_id: int, payload: AdminInput, request: Request, db: Session = Depends(get_db),
+                         user: User = Depends(get_platform_user)):
+    """Hands the campus over to a new Admin in one step: the current Admin is
+    deactivated and signed out, the new one is created and sent a setup
+    link. If the email cannot be sent nothing changes (the current Admin
+    stays active). The old account and everything it did are kept."""
+    campus = campus_or_404(db, user, campus_id)
+    if campus.is_active is False:
+        raise HTTPException(status_code=409, detail="Activate the campus first.")
+    email = str(payload.email).strip().lower()
+    current = active_admin(db, campus.id)
+    if not current:
+        raise HTTPException(status_code=409, detail="This campus has no active Admin; use Invite campus Admin.")
+    if current.email == email:
+        raise HTTPException(status_code=409, detail="That person is already the campus's Admin.")
+    previous = {"id": current.id, "email": current.email}
+    current.is_active = False
+    current.sessions_revoked_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=1)
+    db.flush()
+    try:
+        admin, created = provision_admin(db, campus, payload.full_name, email)   # commits only after the email
+    except AccountProvisioningError as exc:
+        db.rollback()
+        record_platform_audit(db, action="REPLACE_ADMIN", target_type="USER", campus_id=campus.id, actor=user,
+                              request=request, outcome="FAILURE",
+                              details={"previous": previous, "email": email, "error": str(exc)[:200]})
+        db.commit()
+        raise HTTPException(status_code=409 if "already" in str(exc) else 503, detail=str(exc)) from None
+    record_platform_audit(db, action="REPLACE_ADMIN", target_type="USER", target_id=admin.id, campus_id=campus.id,
+                          actor=user, request=request, details={"previous": previous, "email": admin.email})
+    db.add(AuditLog(campus_id=campus.id, user_id=None, action="DEACTIVATE", entity_type="USER", entity_id=previous["id"],
+                    details={"reason": "Replaced as campus Admin by the platform", "new_admin": admin.email}))
+    db.commit()
+    return {"id": admin.id, "full_name": admin.full_name, "email": admin.email, "previous": previous,
+            "message": "Admin replaced; setup link emailed to the new Admin."}
 
 
 # ============================================================

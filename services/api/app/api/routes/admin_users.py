@@ -157,6 +157,11 @@ def reactivate_account(user_id: int, payload: ReasonInput, db: Session = Depends
     user = campus_user(db, admin, user_id)
     if user.is_active:
         raise HTTPException(status_code=409, detail="This account is already active.")
+    if user.role == UserRole.ADMIN:
+        # One active Admin per campus (migration a7d3e9b1c4f2): a second one
+        # is replaced through the platform, never reactivated here.
+        raise HTTPException(status_code=409, detail="This campus already has its active Admin. A platform "
+                                                    "administrator can replace the Admin if needed.")
     user.is_active = True
     record_audit(db, admin, "REACTIVATE", "USER", user.id, {"reason": payload.reason.strip()})
     db.commit()

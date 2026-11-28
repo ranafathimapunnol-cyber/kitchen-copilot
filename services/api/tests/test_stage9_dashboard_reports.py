@@ -214,6 +214,8 @@ def test_every_report_runs_for_managers_and_respects_permissions(client, db, spe
 
     grant(db, a.staff, a.admin, "meal.read")
     act_as(client, a.staff)
+    assert client.get(f"{REPORTS}/catalog").status_code == 403         # Reports need report.read (27 Nov 2026)
+    grant(db, a.staff, a.admin, "report.read")
     staff_keys = {r["key"] for r in ok(client.get(f"{REPORTS}/catalog"))["items"]}
     assert staff_keys == {"meal_distribution", "leftovers"}
     assert client.get(f"{REPORTS}/purchase_transactions", params={"date_from": "2026-07-01", "date_to": "2026-07-31"}).status_code == 403

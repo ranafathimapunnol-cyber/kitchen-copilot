@@ -100,6 +100,7 @@ def test_staff_sees_only_what_they_are_granted(client, db, kitchen, agent_on):
     low_rice(db, kitchen)
     a = kitchen.a
     act_as(client, a.staff)
+    grant(db, a.staff, a.admin, "copilot.read")
     # Without dashboard.read the tool is refused.
     assert ask(client, "What needs attention today?")["answer"]["payload"]["status"] == "not_allowed"
     # With dashboard.read only: no stock, money or meal figures leak through.
@@ -141,6 +142,8 @@ def test_status_reports_the_attention_job_per_user(client, db, world, agent_on):
     act_as(client, world.a.manager)
     assert client.get(f"{AGENT}/status").json()["workflows"]["attention"] is True
     act_as(client, world.a.staff)
+    assert client.get(f"{AGENT}/status").status_code == 403          # Copilot not assigned
+    grant(db, world.a.staff, world.a.admin, "copilot.read")
     assert client.get(f"{AGENT}/status").json()["workflows"]["attention"] is False
 
 

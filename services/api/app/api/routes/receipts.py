@@ -9,7 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_any_permission
 from app.api.routes.master_data import (
     get_unit_conversion_factor,
     record_audit,
@@ -468,7 +468,7 @@ def create_receipt(
     payload: ReceiptCreate,
     db: Session = Depends(get_db),
     user: User = Depends(
-        require_permission("inventory.create")
+        require_any_permission("goods_receipt.create", "inventory.create")
     ),
 ):
     purchase = campus_purchase(db, user, purchase_id, lock=True)
@@ -540,7 +540,7 @@ def list_purchase_receipts(
     purchase_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(
-        require_permission("inventory.read")
+        require_any_permission("goods_receipt.read", "inventory.read")
     ),
 ):
     purchase = (
@@ -590,7 +590,7 @@ def list_receipts(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.read")),
+    user: User = Depends(require_any_permission("goods_receipt.read", "inventory.read")),
 ):
     """Every goods receipt of the campus, newest first, with its bill and
     supplier. No prices: receipts are about quantities."""
@@ -713,7 +713,7 @@ def list_receivable_bills(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.create")),
+    user: User = Depends(require_any_permission("goods_receipt.create", "inventory.create")),
 ):
     """Bills with at least one line not yet fully received, for choosing
     the bill a delivery belongs to. Quantities only, no amounts."""
@@ -796,7 +796,7 @@ def list_receivable_bills(
 def purchase_receiving(
     purchase_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.read")),
+    user: User = Depends(require_any_permission("goods_receipt.read", "inventory.read")),
 ):
     """Per bill line: ordered (when the line bills a purchase-order line,
     converted into the bill line's unit), billed, received, accepted,
@@ -921,7 +921,7 @@ def get_receipt_detail(
     receipt_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(
-        require_permission("inventory.read")
+        require_any_permission("goods_receipt.read", "inventory.read")
     ),
 ):
     receipt = get_receipt(
@@ -945,7 +945,7 @@ def accept_receipt(
     receipt_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(
-        require_permission("inventory.update")
+        require_any_permission("goods_receipt.update", "inventory.update")
     ),
 ):
     receipt = (
@@ -1214,7 +1214,7 @@ def update_draft_receipt(
     receipt_id: int,
     payload: ReceiptUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.update")),
+    user: User = Depends(require_any_permission("goods_receipt.update", "inventory.update")),
 ):
     """Drafts post no stock, so their quantities may be corrected (for
     example, after inspecting a delivery) before acceptance. The change and
@@ -1291,7 +1291,7 @@ def cancel_draft_receipt(
     receipt_id: int,
     payload: ReceiptCancel,
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.update")),
+    user: User = Depends(require_any_permission("goods_receipt.update", "inventory.update")),
 ):
     """Withdraw a draft entered by mistake. The receipt is kept with status
     CANCELLED, frees the quantity it reserved and never affects stock."""
@@ -1338,7 +1338,7 @@ def stock_movement_log(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("inventory.read")),
+    user: User = Depends(require_any_permission("goods_receipt.read", "inventory.read")),
 ):
     """Stock movements with item, unit, source and recorder, newest first.
     Dates are campus-local days."""
@@ -1445,7 +1445,7 @@ def stock_movement_log(
 def list_stock_movements(
     db: Session = Depends(get_db),
     user: User = Depends(
-        require_permission("inventory.read")
+        require_any_permission("goods_receipt.read", "inventory.read")
     ),
 ):
     movements = (

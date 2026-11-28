@@ -1,4 +1,5 @@
-const PATH_PERMISSIONS: Record<string, string> = {
+// A page opens when the user holds the code, or any one of the codes listed.
+const PATH_PERMISSIONS: Record<string, string | string[]> = {
   "/dashboard/categories": "inventory.read",
   "/dashboard/units": "inventory.read",
   "/dashboard/unit-conversions": "inventory.read",
@@ -33,8 +34,10 @@ const PATH_PERMISSIONS: Record<string, string> = {
   // Goods receipts and the stock log use the codes the receipts API checks.
   // Correcting, accepting and cancelling (inventory.update) are checked on
   // the receipt page and by the API.
-  "/dashboard/receipts/new": "inventory.create",
-  "/dashboard/receipts": "inventory.read",
+  // Since 27 Nov 2026 receipts also have their own codes (goods_receipt.*),
+  // assignable to STAFF without opening items and suppliers.
+  "/dashboard/receipts/new": ["goods_receipt.create", "inventory.create"],
+  "/dashboard/receipts": ["goods_receipt.read", "inventory.read"],
   "/dashboard/stock-movements": "inventory.read",
 
   // Stock ledger (Stage 4): balances, replenishment list and item ledgers.
@@ -70,7 +73,17 @@ const PATH_PERMISSIONS: Record<string, string> = {
   // report catalogue needs the dashboard code, and each report checks its
   // own module permission in the API.
   "/dashboard/analytics": "purchase_bill.read",
-  "/dashboard/reports": "dashboard.read",
+  // 27 Nov 2026: the Reports screen needs report.read (ADMIN and
+  // KITCHEN_MANAGER hold it; STAFF by assignment).
+  "/dashboard/reports": "report.read",
+
+  // Staff tasks (27 Nov 2026): ADMIN manages; KITCHEN_MANAGER reads all;
+  // STAFF with task.read see their own.
+  "/dashboard/tasks": "task.read",
+
+  // Kitchen Copilot (27 Nov 2026): STAFF need copilot.read; ADMIN and
+  // KITCHEN_MANAGER hold it.
+  "/dashboard/copilot": "copilot.read",
 
   // Stage 10: the audit viewer (ADMIN and KITCHEN_MANAGER hold audit.read;
   // it is never STAFF-assignable).
@@ -91,9 +104,6 @@ const ROLE_PATHS: Record<string, string[]> = {
   "/dashboard/outsourced-food/new": ["ADMIN", "KITCHEN_MANAGER"],
   // Stage 10: campus user accounts are managed by the campus ADMIN only.
   "/dashboard/users": ["ADMIN"],
-  // Stage 12: Kitchen Copilot for every campus user; each job checks its own
-  // permissions in the API.
-  "/dashboard/copilot": ["ADMIN", "KITCHEN_MANAGER", "STAFF"],
   // Everyone signed in manages their own sessions.
   "/dashboard/account": ["SUPER_ADMIN", "ADMIN", "KITCHEN_MANAGER", "STAFF"],
 };
@@ -149,5 +159,6 @@ export function canAccessPath(
     return false;
   }
 
-  return permissions.includes(PATH_PERMISSIONS[matchingPath]);
+  const needed = PATH_PERMISSIONS[matchingPath];
+  return Array.isArray(needed) ? needed.some((code) => permissions.includes(code)) : permissions.includes(needed);
 }

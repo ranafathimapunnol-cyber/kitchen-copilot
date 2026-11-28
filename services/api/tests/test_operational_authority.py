@@ -68,6 +68,11 @@ MODULES = {
     # Added by migration f3a8c2d61b47 (Stage 6, decision 6-3).
     "portion_standard": ("Portion Standards", ["CREATE", "READ", "UPDATE"]),
     "meal_plan": ("Meal Plans", ["CREATE", "READ", "UPDATE"]),
+    # Added by migration a7d3e9b1c4f2 (27 November 2026).
+    "goods_receipt": ("Goods Receipts", ["CREATE", "READ", "UPDATE"]),
+    "report": ("Reports", ["READ"]),
+    "task": ("Tasks", ["READ", "UPDATE"]),
+    "copilot": ("Kitchen Copilot", ["READ"]),
 }
 
 OPERATIONAL_READS = [
@@ -261,7 +266,10 @@ def test_manager_holds_every_operational_permission(client, world):
         client.get("/api/authorization/me").json()["permissions"]
     )
 
-    assert manager_codes == admin_codes
+    # Owner request 27 Nov 2026: the Kitchen Manager has every operational
+    # code except task.update (updating task status is the assigned Staff's
+    # job; assigning tasks is the Admin's).
+    assert manager_codes == admin_codes - {"task.update"}
     assert {"purchase_bill.create", "purchase_bill.read", "purchase_bill.update",
             "purchase_order.create", "purchase_order.read",
             "purchase_order.update", "audit.read"} <= manager_codes
@@ -580,11 +588,12 @@ def test_staff_inactive_bill_grant_gives_no_payment_access(
     assert db.query(SupplierPayment).count() == 0
 
 
-@pytest.mark.parametrize("code", ["purchase_bill.read", "purchase_order.read"])
-def test_bill_and_order_permissions_still_cannot_be_newly_assigned_to_staff(
+@pytest.mark.parametrize("code", ["purchase_order.read", "purchase_order.create", "audit.read"])
+def test_order_and_audit_permissions_still_cannot_be_newly_assigned_to_staff(
     client, db, world, code
 ):
-    # Neither namespace is on the STAFF list (decision 18 November 2026).
+    # Purchase orders stay ADMIN and KITCHEN_MANAGER only (decision 20 Nov
+    # 2026). Supplier bills became assignable on 27 Nov 2026 (owner request).
     permission = db.query(Permission).filter_by(permission_code=code).one()
     act_as(client, world.a.admin)
 

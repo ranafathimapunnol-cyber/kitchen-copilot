@@ -19,7 +19,7 @@ import { CampusFields, formBody, type CampusForm } from "@/components/platform/C
 import CampusMediaSection from "@/components/platform/CampusMediaSection";
 import { ActiveBadge, ErpBadge, Kpi, PeriodFilter, PlatformHeader, Section, usePlatformGet } from "@/components/platform/parts";
 
-type Dialog = "edit" | "deactivate" | "activate" | "admin" | null;
+type Dialog = "edit" | "deactivate" | "activate" | "admin" | "replace" | null;
 
 /** One campus: details, status, users, operational summary and integration. */
 export default function CampusPage() {
@@ -42,7 +42,7 @@ export default function CampusPage() {
     setDialogError("");
     setReason("");
     if (kind === "edit" && c) setForm({ name: c.name, code: c.code, address: c.address ?? "", contact_name: c.contact_name ?? "", contact_email: c.contact_email ?? "", contact_phone: c.contact_phone ?? "" });
-    if (kind === "admin") setAdmin({ full_name: "", email: "" });
+    if (kind === "admin" || kind === "replace") setAdmin({ full_name: "", email: "" });
     setDialog(kind);
   }
 
@@ -125,7 +125,9 @@ export default function CampusPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Section title="Campus users" description="Read-only here: the campus's Admin manages its users and permissions."
-          action={c.is_active ? <Button size="sm" variant="secondary" icon={<UserPlus size={15} />} onClick={() => open("admin")}>Invite campus Admin</Button> : undefined}>
+          action={!c.is_active ? undefined : c.users.ADMIN > 0
+            ? <Button size="sm" variant="secondary" icon={<UserPlus size={15} />} onClick={() => open("replace")}>Replace Admin</Button>
+            : <Button size="sm" variant="secondary" icon={<UserPlus size={15} />} onClick={() => open("admin")}>Invite campus Admin</Button>}>
           {!users.data ? <TableSkeleton rows={3} /> : users.data.items.length === 0 ? <p className="px-5 py-6 text-sm text-slate-500">No users yet. Invite the campus&rsquo;s first Admin.</p> : (
             <Table minWidth="560px">
               <THead><TR><TH>Name</TH><TH>Role</TH><TH>Status</TH><TH>Last sign-in</TH></TR></THead>
@@ -201,6 +203,17 @@ export default function CampusPage() {
         footer={<><Button variant="secondary" onClick={() => setDialog(null)} disabled={busy}>Cancel</Button>
           <Button loading={busy} onClick={() => run(() => api.post(`${PLATFORM_API}/campuses/${id}/activate`), "Campus activated.")}>Activate</Button></>}>
         {dialogError ? <p className="text-sm text-red-700" role="alert">{dialogError}</p> : <span />}
+      </Modal>
+
+      <Modal open={dialog === "replace"} onClose={() => !busy && setDialog(null)} title="Replace the campus Admin" size="sm" dismissible={!busy}
+        description="Each campus has exactly one active Admin. The current Admin is deactivated and signed out (their account and history are kept) and the new Admin gets a setup link. If the email cannot be sent, nothing changes."
+        footer={<><Button variant="secondary" onClick={() => setDialog(null)} disabled={busy}>Cancel</Button>
+          <Button variant="danger" loading={busy} disabled={admin.full_name.trim().length < 2 || !admin.email.includes("@")} onClick={() => run(() => api.post(`${PLATFORM_API}/campuses/${id}/admins/replace`, admin), "Admin replaced; setup link emailed.")}>Replace Admin</Button></>}>
+        {dialogError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{dialogError}</p>}
+        <div className="space-y-4">
+          <Field label="New Admin's full name" required>{({ id: fid }) => <TextInput id={fid} value={admin.full_name} onChange={(e) => setAdmin({ ...admin, full_name: e.target.value })} data-autofocus />}</Field>
+          <Field label="New Admin's email" required>{({ id: fid }) => <TextInput id={fid} type="email" value={admin.email} onChange={(e) => setAdmin({ ...admin, email: e.target.value })} />}</Field>
+        </div>
       </Modal>
 
       <Modal open={dialog === "admin"} onClose={() => !busy && setDialog(null)} title="Invite the campus Admin" size="sm" dismissible={!busy}

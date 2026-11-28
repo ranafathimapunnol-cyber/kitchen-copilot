@@ -9,6 +9,7 @@ import {
   CalendarRange,
   BarChart3,
   Bot,
+  ListTodo,
   ScrollText,
   ShieldCheck,
   UserCog,
@@ -60,6 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       // Stage 12: the agent (every campus user; jobs check permissions).
       { label: "Kitchen Copilot", href: "/dashboard/copilot", icon: Bot },
+      // Staff tasks (27 Nov 2026): ADMIN assigns; STAFF see their own.
+      { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
     ],
   },
   {

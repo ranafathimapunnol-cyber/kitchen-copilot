@@ -54,6 +54,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const groups = visibleNavGroups(role, permissions);
   const { logo: campusLogo } = useCampusMedia();
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const [folded, setFolded] = useState<Set<string>>(new Set());
 
@@ -97,10 +98,11 @@ export default function Sidebar({
           aria-label="Kitchen Copilot home"
           className="flex min-w-0 items-center gap-3"
         >
-          {campusLogo ? (
+          {campusLogo && !logoFailed ? (
             <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element -- authenticated API image */}
-              <img src={campusLogo} alt="Campus logo" className="h-full w-full object-contain p-1" data-campus-logo />
+              <img src={campusLogo} alt="Campus logo" className="h-full w-full object-contain p-1" data-campus-logo
+                onError={() => setLogoFailed(true)} />
             </span>
           ) : (
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-brand-200">

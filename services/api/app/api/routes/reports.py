@@ -5,7 +5,7 @@ is a POST (CSRF) and writes an audit row. See app/services/tabular_reports.py.""
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,17 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services import tabular_reports as tr
 from app.services.report_exports import EXPORT_MEDIA_TYPES
+
+def report_reader(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+    """The Reports screen and its exports: ADMIN and KITCHEN_MANAGER always;
+    STAFF need report.read (owner request 27 Nov 2026). Each report still
+    checks its own data permission."""
+    from app.api.dependencies import user_has_permission
+
+    if not user_has_permission(db, user, "report.read"):
+        raise HTTPException(status_code=403, detail="Reports have not been assigned to you.")
+    return user
+
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
@@ -31,13 +42,13 @@ class ExportInput(BaseModel):
 
 
 @router.get("/catalog")
-def report_catalog(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def report_catalog(db: Session = Depends(get_db), user: User = Depends(report_reader)):
     """The reports this user may open (each report's own permission)."""
     return {"items": tr.catalogue(db, user)}
 
 
 @router.get("/lookups")
-def report_lookups(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def report_lookups(db: Session = Depends(get_db), user: User = Depends(report_reader)):
     """Filter choices for the reports this user may open: categories, items
     and meal sessions; suppliers only with bill or inventory access."""
     from sqlalchemy import func
@@ -70,13 +81,13 @@ def run_report(
     supplier_id: int | None = Query(default=None, gt=0), category_id: int | None = Query(default=None, gt=0),
     item_id: int | None = Query(default=None, gt=0), meal_session_id: int | None = Query(default=None, gt=0),
     compare: Literal["elapsed", "full", "previous"] = Query(default="elapsed"),
-    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+    db: Session = Depends(get_db), user: User = Depends(report_reader),
 ):
     return tr.build(db, user, key, tr.Params(date_from, date_to, supplier_id, category_id, item_id, meal_session_id, compare))
 
 
 @router.post("/{key}/export")
-def export_report(key: str, payload: ExportInput, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def export_report(key: str, payload: ExportInput, db: Session = Depends(get_db), user: User = Depends(report_reader)):
     from app.services.tabular_exports import export_filename, render_pdf, render_xlsx
 
     report = tr.build(db, user, key, tr.Params(payload.date_from, payload.date_to, payload.supplier_id, payload.category_id,

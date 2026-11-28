@@ -76,7 +76,7 @@ export default function CampusMediaSection({ campusId, campusName, media, onChan
                 kind === "logo" ? "h-24 w-24" : "h-24 w-40")} data-media-preview={kind}>
                 {version
                   ? /* eslint-disable-next-line @next/next/no-img-element -- authenticated API image */
-                    <img src={apiUrl(mediaPath(campusId, kind, version))} alt={`${campusName} ${MEDIA_SPECS[kind].label.toLowerCase()}`}
+                    <img onError={(e) => { e.currentTarget.hidden = true; }} src={apiUrl(mediaPath(campusId, kind, version))} alt={`${campusName} ${MEDIA_SPECS[kind].label.toLowerCase()}`}
                       className={kind === "logo" ? "h-full w-full object-contain p-2" : "h-full w-full object-cover"} />
                   : <ImageOff size={22} aria-hidden className="text-slate-400" />}
               </div>

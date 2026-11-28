@@ -127,9 +127,16 @@ def people(db):
     db.add(campus)
     db.flush()
 
-    def make(role, email, active=True, usable=True):
+    # One active Admin per campus (27 Nov 2026): the not-yet-set-up Admin
+    # belongs to a second campus that has no other Admin.
+    other_campus = Campus(name="Zaitoon Test Campus Two", code="ZT-TEST-2")
+    fresh = Campus(name="Zaitoon Test Campus Three", code="ZT-TEST-3")   # no Admin yet
+    db.add_all([other_campus, fresh])
+    db.flush()
+
+    def make(role, email, active=True, usable=True, campus_id=None):
         user = User(
-            campus_id=campus.id,
+            campus_id=campus_id or campus.id,
             full_name=f"Test {role.value.title()}",
             email=email,
             password_hash=(
@@ -143,8 +150,9 @@ def people(db):
 
     people = SimpleNamespace(
         campus=campus,
+        fresh=fresh,
         admin=make(UserRole.ADMIN, "admin@test.com"),
-        pending=make(UserRole.ADMIN, "new.admin@test.com", usable=False),
+        pending=make(UserRole.ADMIN, "new.admin@test.com", usable=False, campus_id=other_campus.id),
         manager=make(UserRole.KITCHEN_MANAGER, "manager@test.com"),
         staff=make(UserRole.STAFF, "staff@test.com"),
         inactive=make(UserRole.ADMIN, "former.admin@test.com", active=False),
@@ -225,7 +233,7 @@ def stored_hash(db, user) -> str:
 
 def test_provisioned_admin_gets_setup_link_and_no_password(db, people, outbox):
     user, created = pm.provision_admin(
-        db, people.campus, "Asha Admin", "asha@test.com"
+        db, people.fresh, "Asha Admin", "asha@test.com"
     )
 
     assert created
@@ -249,7 +257,7 @@ def test_provisioning_saves_nothing_when_setup_email_fails(
     break_mailer(monkeypatch)
 
     with pytest.raises(pm.AccountProvisioningError, match="nothing was saved"):
-        pm.provision_admin(db, people.campus, "Asha Admin", "asha@test.com")
+        pm.provision_admin(db, people.fresh, "Asha Admin", "asha@test.com")
 
     assert db.query(User).filter(User.email == "asha@test.com").first() is None
     assert db.query(AuditLog).count() == 0
@@ -261,16 +269,16 @@ def test_provisioning_saves_nothing_without_frontend_url(
     monkeypatch.setattr(settings, "FRONTEND_BASE_URL", None)
 
     with pytest.raises(pm.AccountProvisioningError):
-        pm.provision_admin(db, people.campus, "Asha Admin", "asha@test.com")
+        pm.provision_admin(db, people.fresh, "Asha Admin", "asha@test.com")
 
     assert outbox == []
     assert db.query(User).filter(User.email == "asha@test.com").first() is None
 
 
 def test_resending_setup_disables_earlier_links(db, people, outbox, client):
-    pm.provision_admin(db, people.campus, "Asha Admin", "asha@test.com")
+    pm.provision_admin(db, people.fresh, "Asha Admin", "asha@test.com")
     _user, created = pm.provision_admin(
-        db, people.campus, "Asha Admin", "asha@test.com"
+        db, people.fresh, "Asha Admin", "asha@test.com"
     )
 
     assert not created
@@ -299,7 +307,7 @@ def test_pending_admin_cannot_sign_in(client, people):
 def test_initial_setup_sets_hashed_password_and_confirms(
     client, db, people, outbox
 ):
-    user, _ = pm.provision_admin(db, people.campus, "Asha", "asha@test.com")
+    user, _ = pm.provision_admin(db, people.fresh, "Asha", "asha@test.com")
 
     response = submit(client, "setup", token_from(outbox[0]))
 
@@ -326,7 +334,7 @@ def test_initial_setup_sets_hashed_password_and_confirms(
 
 
 def test_setup_link_cannot_be_reused(client, db, people, outbox):
-    pm.provision_admin(db, people.campus, "Asha", "asha@test.com")
+    pm.provision_admin(db, people.fresh, "Asha", "asha@test.com")
     token = token_from(outbox[0])
 
     assert submit(client, "setup", token).status_code == 200
@@ -338,7 +346,7 @@ def test_setup_link_cannot_be_reused(client, db, people, outbox):
 
 
 def test_setup_and_reset_links_are_not_interchangeable(client, db, people, outbox):
-    pm.provision_admin(db, people.campus, "Asha", "asha@test.com")
+    pm.provision_admin(db, people.fresh, "Asha", "asha@test.com")
     setup_token = token_from(outbox[0])
 
     assert submit(client, "reset", setup_token).status_code == 400
@@ -723,3 +731,10 @@ def test_unconfigured_email_is_reported_as_failure(monkeypatch):
 
     with pytest.raises(email_transport.EmailNotConfiguredError):
         email_transport.send_email("admin@test.com", "Subject", "Body")
+
+
+def test_a_campus_with_an_active_admin_gets_no_second_one(db, people, outbox):
+    """One active Admin per campus (27 Nov 2026)."""
+    with pytest.raises(pm.AccountProvisioningError, match="already has an active Admin"):
+        pm.provision_admin(db, people.campus, "Second Admin", "second.admin@test.com")
+    assert outbox == []

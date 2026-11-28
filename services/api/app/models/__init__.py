@@ -147,3 +147,7 @@ from app.models.platform import (  # noqa: E402
 )
 
 __all__ += ["Organization", "PlatformAuditLog", "CampusIntegration", "ErpSyncRun", "ErpHeadcountImport"]
+
+from app.models.tasks import StaffTask  # noqa: E402
+
+__all__ += ["StaffTask"]

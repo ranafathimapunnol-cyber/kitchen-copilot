@@ -258,6 +258,10 @@ def test_agent_asks_for_missing_details_and_continues(client, plan_world, agent_
 def test_staff_without_permissions_is_refused_and_campus_is_isolated(client, db, plan_world, agent_on):
     a, b = plan_world.a, plan_world.b
     act_as(client, a.staff)
+    # Without copilot.read STAFF cannot use Copilot at all (27 Nov 2026) ...
+    assert client.post(f"{AGENT}/messages", json={"text": "Why did spending go up?"}).status_code == 403
+    grant(db, a.staff, a.admin, "copilot.read")
+    # ... and with it, each job still checks its own permission.
     reply = ask(client, "Why did spending go up this month?")
     assert reply["answer"]["payload"]["status"] == "not_allowed"
     act_as(client, a.manager)

@@ -65,6 +65,11 @@ MODULES = [
     ("Outsourced Food", "outsourced_food"),
     ("Menu", "menu"),
     ("Audit", "audit"),
+    # Migration a7d3e9b1c4f2.
+    ("Goods Receipts", "goods_receipt"),
+    ("Reports", "report"),
+    ("Tasks", "task"),
+    ("Kitchen Copilot", "copilot"),
 ]
 
 PERMISSIONS = {
@@ -77,6 +82,10 @@ PERMISSIONS = {
     "outsourced_food": ["CREATE", "READ", "UPDATE"],
     "menu": ["CREATE", "READ", "UPDATE"],
     "audit": ["READ"],
+    "goods_receipt": ["CREATE", "READ", "UPDATE"],
+    "report": ["READ"],
+    "task": ["READ", "UPDATE"],
+    "copilot": ["READ"],
 }
 
 

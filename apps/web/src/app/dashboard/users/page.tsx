@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, History, KeyRound, LogOut, Pencil, Power, UserCog, UserPlus } from "lucide-react";
+import { ChefHat, Copy, History, KeyRound, LogOut, Pencil, Power, ShieldCheck, UserCog, UserPlus } from "lucide-react";
 
 import { api } from "@/lib/api/client";
 import { ADMIN_USERS_ENDPOINT } from "@/lib/api/endpoints";
@@ -19,6 +19,7 @@ import SearchInput from "@/components/ui/SearchInput";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/States";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/Toast";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 type Account = {
   id: number; full_name: string; email: string; role: string; is_active: boolean;
@@ -31,6 +32,7 @@ type Dialog =
   | { kind: "revoke"; account: Account }
   | { kind: "link"; account: Account; link?: string; minutes?: number }
   | { kind: "history"; account: Account; rows?: SignIn[]; error?: string }
+  | { kind: "add"; role: "STAFF" | "KITCHEN_MANAGER" }
   | null;
 
 /** Stage 10: campus user accounts (ADMIN only). STAFF permissions stay on Staff Management. */
@@ -49,6 +51,31 @@ export default function UsersPage() {
   const [name, setName] = useState("");
   const [newRole, setNewRole] = useState("");
   const [reason, setReason] = useState("");
+  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "" });
+  const [addError, setAddError] = useState("");
+
+  function openAdd(role: "STAFF" | "KITCHEN_MANAGER") {
+    setNewUser({ full_name: "", email: "", password: "" });
+    setAddError("");
+    setDialog({ kind: "add", role });
+  }
+
+  async function addUser() {
+    if (dialog?.kind !== "add") return;
+    setBusy(true);
+    setAddError("");
+    try {
+      // The API always places the account on your own campus.
+      await api.post("/api/auth/users", { ...newUser, full_name: newUser.full_name.trim(), email: newUser.email.trim(), role: dialog.role });
+      toast.success(`${dialog.role === "STAFF" ? "Staff member" : "Kitchen Manager"} added. ${dialog.role === "STAFF" ? "Assign their permissions on Staff permissions." : ""}`);
+      setDialog(null);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setAddError(errorMessage(err, "The account could not be created."));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
@@ -116,7 +143,11 @@ export default function UsersPage() {
         eyebrow="Administration"
         title="User Accounts"
         description="Accounts on your campus: names, roles, access status and sign-in security. Permissions for Staff are set on Staff Management."
-        actions={<Link href="/dashboard/staff"><Button variant="secondary" icon={<UserPlus size={16} />}>Create or assign access</Button></Link>}
+        actions={<>
+          <Button icon={<UserPlus size={16} />} onClick={() => openAdd("STAFF")} data-add-staff>Add Staff</Button>
+          <Button variant="secondary" icon={<ChefHat size={16} />} onClick={() => openAdd("KITCHEN_MANAGER")} data-add-manager>Add Kitchen Manager</Button>
+          <Link href="/dashboard/staff"><Button variant="ghost" icon={<ShieldCheck size={16} />}>Staff permissions</Button></Link>
+        </>}
       />
 
       <Card className="p-4">
@@ -278,6 +309,24 @@ export default function UsersPage() {
             </ul>
           )
         )}
+      </Modal>
+      <Modal open={dialog?.kind === "add"} onClose={() => !busy && setDialog(null)} size="sm" dismissible={!busy}
+        title={dialog?.kind === "add" && dialog.role === "KITCHEN_MANAGER" ? "Add a Kitchen Manager" : "Add a Staff member"}
+        description={dialog?.kind === "add" && dialog.role === "KITCHEN_MANAGER"
+          ? "Kitchen Managers run every kitchen operation but cannot manage users or permissions."
+          : "New Staff can sign in but see nothing until you assign their permissions."}
+        footer={<>
+          <Button variant="secondary" onClick={() => setDialog(null)} disabled={busy}>Cancel</Button>
+          <Button loading={busy} disabled={newUser.full_name.trim().length < 2 || !newUser.email.includes("@") || newUser.password.length < 8}
+            onClick={addUser} data-add-submit>Create account</Button>
+        </>}>
+        {addError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{addError}</p>}
+        <div className="space-y-4">
+          <Field label="Full name" required>{({ id }) => <TextInput id={id} value={newUser.full_name} maxLength={150} onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })} data-autofocus />}</Field>
+          <Field label="Email" required>{({ id }) => <TextInput id={id} type="email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />}</Field>
+          <PasswordInput label="Temporary password" required autoComplete="new-password" value={newUser.password}
+            onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} hint="At least 8 characters. Give it to them privately; they can change it later." />
+        </div>
       </Modal>
     </div>
   );

@@ -70,7 +70,7 @@ export default function CampusesPage() {
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                         {c.media?.logo
                           ? /* eslint-disable-next-line @next/next/no-img-element -- authenticated API image */
-                            <img src={apiUrl(mediaPath(c.id, "logo", c.media.logo))} alt="" className="h-full w-full object-contain p-1" />
+                            <img onError={(e) => { e.currentTarget.hidden = true; }} src={apiUrl(mediaPath(c.id, "logo", c.media.logo))} alt="" className="h-full w-full object-contain p-1" />
                           : <Building2 size={16} aria-hidden className="text-slate-400" />}
                       </span>
                       <span className="min-w-0"><Link href={`/platform/campuses/${c.id}`} className="font-semibold text-slate-900 hover:underline">{c.name}</Link><span className="block text-xs text-slate-500">{c.code}{c.organization_name ? ` · ${c.organization_name}` : ""}</span></span>

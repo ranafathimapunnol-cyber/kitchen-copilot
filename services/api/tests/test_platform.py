@@ -237,11 +237,12 @@ def test_users_are_read_only_and_campus_scoped(client, db, world, root):
 def test_provisioning_a_campus_admin_needs_email_and_is_audited(client, db, world, root, monkeypatch):
     monkeypatch.setattr(settings, "SMTP_HOST", None)
     platform_as(client, root)
-    response = client.post(f"{P}/campuses/{world.b.campus.id}/admins", json={"full_name": "New Admin", "email": "new.admin@example.com"})
+    fresh = ok(client.post(f"{P}/campuses", json={"name": "No Admin Yet", "code": "NOADM"}), 201)
+    response = client.post(f"{P}/campuses/{fresh['id']}/admins", json={"full_name": "New Admin", "email": "new.admin@example.com"})
     assert response.status_code == 503
     assert db.query(User).filter(User.email == "new.admin@example.com").count() == 0
     [row] = audits(db, "PROVISION_ADMIN")
-    assert row.outcome == "FAILURE" and row.campus_id == world.b.campus.id
+    assert row.outcome == "FAILURE" and row.campus_id == fresh["id"]
 
 
 # ---------------- audit ----------------

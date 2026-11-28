@@ -38,6 +38,11 @@ EXPECTED_ASSIGNABLE = {
     "outsourced_food.update",
     "menu.read",
     "waste_tracking.create", "waste_tracking.read", "waste_tracking.update",
+    # Owner request 27 November 2026: supplier bills, goods receipts,
+    # reports, tasks and Kitchen Copilot.
+    "purchase_bill.create", "purchase_bill.read", "purchase_bill.update",
+    "goods_receipt.create", "goods_receipt.read", "goods_receipt.update",
+    "report.read", "task.read", "task.update", "copilot.read",
 }
 
 NOT_ASSIGNABLE = [
@@ -49,9 +54,6 @@ NOT_ASSIGNABLE = [
     "purchase_order.create",
     "purchase_order.read",
     "purchase_order.update",
-    "purchase_bill.create",
-    "purchase_bill.read",
-    "purchase_bill.update",
 ]
 
 
